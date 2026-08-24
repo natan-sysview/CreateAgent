@@ -1,0 +1,268 @@
+# Contrato de entrada de CreateAgent
+
+## Índice
+
+1. [Objetivo](#1-objetivo)
+2. [Objeto estándar](#2-objeto-estándar)
+3. [Campos](#3-campos)
+4. [Resultado estructurado](#4-resultado-estructurado)
+5. [Workspace](#5-workspace)
+6. [Herramientas](#6-herramientas)
+7. [Valores internos](#7-valores-internos)
+
+## 1. Objetivo
+
+El objeto representa únicamente lo que la aplicación padre solicita al
+agente. CreateAgent resuelve internamente los argumentos del proveedor, la
+seguridad, la auditoría, la cuarentena y los límites del host.
+
+El JSON Schema vigente está en
+[agent-run-request.schema.json](schemas/agent-run-request.schema.json).
+
+## 2. Objeto estándar
+
+```json
+{
+  "name": "nombre-del-agente",
+  "providerName": "codex",
+  "model": "modelo-opcional",
+  "performance": "normal",
+  "reasoning": {
+    "effort": "medium"
+  },
+  "session": {
+    "mode": "new"
+  },
+  "prompt": "Objetivo que debe cumplir el agente.",
+  "workspace": {
+    "sources": []
+  },
+  "tools": [],
+  "timeout": "PT30M",
+  "debug": false
+}
+```
+
+Los únicos campos obligatorios son:
+
+- `name`;
+- `providerName`;
+- `prompt`.
+
+## 3. Campos
+
+### `name`
+
+Nombre humano de la ejecución. También se usa para crear un directorio legible.
+
+### `providerName`
+
+Adaptador solicitado, por ejemplo `codex`. En el futuro podrá aceptar `claude`
+o `gemini` cuando existan sus adaptadores.
+
+### `model`
+
+Modelo solicitado. Si se omite, el proveedor selecciona su modelo normal.
+
+### `performance`
+
+Velocidad solicitada:
+
+- `normal`;
+- `medium`;
+- `fast`.
+
+Si un proveedor no ofrece el modo solicitado, su adaptador falla con un error
+claro. CreateAgent no cambia la velocidad silenciosamente.
+
+### `reasoning.effort`
+
+Nivel de razonamiento solicitado. Los valores disponibles dependen del
+proveedor. El valor normal es `medium`. El adaptador de Codex acepta
+`minimal`, `low`, `medium`, `high`, `xhigh`, `max` y `ultra`; el modelo
+seleccionado y la versión instalada del CLI deben admitir el nivel solicitado.
+
+Las combinaciones ejecutadas con éxito están registradas en
+[Valores de Codex comprobados](guia_para_agentes_desarrolladores.md#valores-de-codex-comprobados).
+En el menú de Codex, las etiquetas `Mínimo`, `Medio`, `Alto`, `Muy alta` y
+`Ultra` corresponden respectivamente a `low`, `medium`, `high`, `xhigh` y
+`ultra`.
+
+### `session`
+
+Controla la conversación del CLI:
+
+```json
+{"mode": "new"}
+```
+
+Para reanudar una sesión:
+
+```json
+{
+  "mode": "resume",
+  "id": "identificador-de-sesion"
+}
+```
+
+`id` solamente es válido con `resume`. Otros modos disponibles en el contrato
+son `continue-latest`, `fork` y `ephemeral`; cada adaptador declara cuáles
+puede ejecutar.
+
+### `prompt`
+
+Texto inicial que contiene el objetivo del agente.
+
+### `outputSchema`
+
+JSON Schema opcional que define el objeto JSON que debe devolver el agente.
+Si se omite, el resultado final continúa siendo texto.
+
+### `timeout`
+
+Tiempo máximo de ejecución en formato ISO-8601. El valor normal es `PT30M`.
+
+### `debug`
+
+Cuando es `true`, CreateAgent agrega `audit/files.json` con los archivos
+creados, modificados o eliminados. La auditoría básica siempre está activa.
+
+## 4. Resultado estructurado
+
+Este ejemplo solicita exactamente cinco campos:
+
+```json
+{
+  "name": "generar-persona",
+  "providerName": "codex",
+  "prompt": "Genera los datos ficticios de una persona.",
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "nombre": { "type": "string" },
+      "apellido": { "type": "string" },
+      "telefono": { "type": "string" },
+      "email": { "type": "string" },
+      "direccion": { "type": "string" }
+    },
+    "required": ["nombre", "apellido", "telefono", "email", "direccion"],
+    "additionalProperties": false
+  }
+}
+```
+
+El agente devuelve solamente el objeto solicitado:
+
+```json
+{
+  "nombre": "Laura",
+  "apellido": "García",
+  "telefono": "+52 55 1234 5678",
+  "email": "laura.garcia@example.com",
+  "direccion": "Avenida Central 123"
+}
+```
+
+`type`, `properties`, `required` y `additionalProperties` son reglas del
+esquema; no aparecen en el resultado. El consumidor decide los campos de cada
+esquema. CreateAgent no inventa campos de negocio.
+
+El adaptador de Codex materializa el esquema en un archivo temporal porque el
+CLI requiere una ruta para `--output-schema`. Ese archivo es interno, no se
+copia al workspace y se elimina después de ejecutar. El objeto validado queda
+disponible en `AgentRunResult.StructuredOutput` y se registra en
+`audit/output.json`. En este modo no se duplica como texto en `FinalMessage`.
+
+`--json` y `outputSchema` resuelven necesidades distintas: el primero produce
+eventos JSONL en tiempo real; el segundo controla el objeto final.
+
+## 5. Workspace
+
+`workspace.sources` permite copiar cualquier archivo o directorio necesario:
+
+```json
+{
+  "workspace": {
+    "sources": [
+      {
+        "path": "/entrada/agente-codex",
+        "copy": "directory"
+      },
+      {
+        "path": "/entrada/datos",
+        "copy": "contents"
+      },
+      {
+        "path": "/entrada/catalogo.sqlite",
+        "copy": "directory"
+      }
+    ]
+  }
+}
+```
+
+- `directory`: conserva el nombre del directorio dentro del workspace.
+- `contents`: copia solamente el contenido del directorio a la raíz.
+- Para un archivo, CreateAgent copia el archivo a la raíz del workspace.
+
+El consumidor prepara previamente las convenciones específicas de cada
+proveedor, como `AGENTS.md`, `.agents`, `.claude`, skills, SDD, PDFs, imágenes,
+bases SQLite o código fuente. CreateAgent no escribe ni interpreta ese
+contenido.
+
+Para información pesada que no debe copiarse, se declaran rutas externas de
+solo lectura:
+
+```json
+{
+  "workspace": {
+    "readOnlyPaths": [
+      "/datos/proyecto-grande",
+      "/datos/catalogos"
+    ]
+  }
+}
+```
+
+- La información permanece en su ruta original y no ocupa espacio adicional
+  en el workspace.
+- CreateAgent comunica las rutas al agente y le permite leerlas, pero no
+  modificarlas.
+- Una ejecución puede combinar `sources` y `readOnlyPaths`.
+- En Codex no se usa `--add-dir` para este caso porque ese argumento concede
+  escritura. Se aplica un perfil de permisos de lectura (Codex CLI 0.138.0 o
+  posterior).
+
+## 6. Herramientas
+
+`tools` contiene nombres de herramientas registradas por la aplicación host:
+
+```json
+{
+  "tools": [
+    "servidor-mcp-sqlite",
+    "validador-interno"
+  ]
+}
+```
+
+La versión actual conserva el contrato, pero Codex v0.1 rechaza listas no
+vacías hasta que exista el resolvedor de herramientas del host.
+
+## 7. Valores internos
+
+Estos valores ya no forman parte de `AgentRunRequest`:
+
+- `schemaVersion`;
+- `unsupportedBehavior`;
+- `options`;
+- `agentDefinition`;
+- `execution`;
+- `diagnostics`;
+- `audit`;
+- `metadata`;
+- objetos, listas y valores nulos de características no solicitadas.
+
+Las políticas operativas viven en `CreateAgentOptions` o en el adaptador. La
+configuración finalmente utilizada se registra en
+`output.json.executionPlan`, no en el objeto de entrada.

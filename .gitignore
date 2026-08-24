@@ -1,0 +1,46 @@
+# Compilación y paquetes
+**/bin/
+**/obj/
+artifacts/
+packages/
+*.nupkg
+*.snupkg
+
+# Pruebas y cobertura
+**/TestResults/
+coverage/
+coverage.*
+*.coverage
+*.trx
+
+# Datos generados por CreateAgent
+.createagent/
+**/runtime-data/
+**/runs/
+**/quarantine/
+*.log
+*.zip
+
+# Cachés y archivos temporales
+.dotnet_cli_home/
+.nuget/
+.npm/
+.cache/
+tmp/
+temp/
+*.tmp
+
+# Configuración local y secretos
+.env
+.env.*
+!.env.example
+appsettings.Development.json
+
+# IDE y sistema operativo
+.idea/
+.vs/
+.vscode/
+*.user
+*.suo
+.DS_Store
+Thumbs.db

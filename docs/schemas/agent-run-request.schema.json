@@ -1,0 +1,147 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:createagent:agent-run-request",
+  "title": "CreateAgent request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "name",
+    "providerName",
+    "prompt"
+  ],
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "providerName": {
+      "type": "string",
+      "minLength": 1
+    },
+    "model": {
+      "type": "string",
+      "minLength": 1,
+      "default": "provider-default"
+    },
+    "performance": {
+      "type": "string",
+      "enum": ["normal", "medium", "fast"],
+      "default": "normal"
+    },
+    "reasoning": {
+      "$ref": "#/$defs/reasoning"
+    },
+    "session": {
+      "$ref": "#/$defs/session"
+    },
+    "prompt": {
+      "type": "string",
+      "minLength": 1
+    },
+    "outputSchema": {
+      "type": "object",
+      "description": "JSON Schema opcional para la respuesta final estructurada."
+    },
+    "workspace": {
+      "$ref": "#/$defs/workspace"
+    },
+    "tools": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true,
+      "default": []
+    },
+    "timeout": {
+      "type": "string",
+      "description": "Duración ISO-8601, por ejemplo PT30M.",
+      "default": "PT30M"
+    },
+    "debug": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "$defs": {
+    "reasoning": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["effort"],
+      "properties": {
+        "effort": {
+          "type": "string",
+          "minLength": 1,
+          "default": "medium"
+        }
+      }
+    },
+    "session": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode"],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["new", "resume", "continue-latest", "fork", "ephemeral"],
+          "default": "new"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"mode": {"const": "resume"}},
+            "required": ["mode"]
+          },
+          "then": {
+            "required": ["id"]
+          },
+          "else": {
+            "not": {"required": ["id"]}
+          }
+        }
+      ]
+    },
+    "workspace": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sources": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path"],
+            "properties": {
+              "path": {
+                "type": "string",
+                "minLength": 1
+              },
+              "copy": {
+                "type": "string",
+                "enum": ["directory", "contents"],
+                "default": "directory"
+              }
+            }
+          }
+        },
+        "readOnlyPaths": {
+          "type": "array",
+          "default": [],
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}

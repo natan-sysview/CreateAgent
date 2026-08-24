@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>CreateAgent.Cli</AssemblyName>
+    <RootNamespace>CreateAgent.Cli</RootNamespace>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>createagent</ToolCommandName>
+    <PackageId>CreateAgent.Cli</PackageId>
+    <Description>Reference .NET tool for running, observing and auditing CreateAgent workers from JSON requests.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CreateAgent\CreateAgent.csproj" />
+    <ProjectReference Include="..\CreateAgent.Core\CreateAgent.Core.csproj" />
+    <ProjectReference Include="..\CreateAgent.Providers.Codex\CreateAgent.Providers.Codex.csproj" />
+    <ProjectReference Include="..\CreateAgent.Runtime.Processes\CreateAgent.Runtime.Processes.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\docs\schemas\agent-run-request.schema.json" Link="Schemas\agent-run-request.schema.json" LogicalName="CreateAgent.Cli.Schemas.agent-run-request.schema.json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Spectre.Console" Version="0.57.2" />
+  </ItemGroup>
+</Project>

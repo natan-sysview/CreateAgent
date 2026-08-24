@@ -1,0 +1,17 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\CreateAgent.Abstractions\CreateAgent.Abstractions.csproj" />
+    <ProjectReference Include="..\CreateAgent.Core\CreateAgent.Core.csproj" />
+    <ProjectReference Include="..\CreateAgent.Runtime.Processes\CreateAgent.Runtime.Processes.csproj" />
+    <ProjectReference Include="..\CreateAgent.Storage.FileSystem\CreateAgent.Storage.FileSystem.csproj" />
+    <ProjectReference Include="..\CreateAgent.Providers.Codex\CreateAgent.Providers.Codex.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>
