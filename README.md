@@ -3,8 +3,8 @@
 CreateAgent es una biblioteca C# para crear y controlar agentes de IA desde
 una aplicación, un backend o un CLI.
 
-Actualmente utiliza **Codex CLI** como motor. La arquitectura permite agregar
-adaptadores para otros motores, como Claude Code o Gemini CLI.
+Actualmente incluye adaptadores para **Codex CLI** y **Claude Code**. La
+arquitectura permite agregar otros motores, como Gemini CLI.
 
 ## ¿Qué hace?
 
@@ -20,7 +20,7 @@ adaptadores para otros motores, como Claude Code o Gemini CLI.
 ## Requisitos
 
 - .NET 10 SDK.
-- Codex CLI instalado y autenticado.
+- Codex CLI o Claude Code instalado y autenticado.
 
 ## Uso básico desde C#
 
@@ -63,6 +63,9 @@ Console.WriteLine(resultado.FinalMessage);
 `resultado` indica si el agente terminó correctamente, sus fechas de inicio y
 fin, qué workspace utilizó y si produjo errores o archivos de auditoría.
 
+Para usar Claude Code cambia `ProviderName` a `"claude"`. También se acepta
+el identificador completo `"anthropic.claude"`.
+
 ## Archivos para el agente
 
 Para copiar archivos al workspace:
@@ -98,6 +101,8 @@ Para consultar información pesada sin copiarla ni modificarla:
 dotnet run --project src/CreateAgent.Cli -- request init --provider codex --output request.json
 dotnet run --project src/CreateAgent.Cli -- run request.json --storage ./runtime-data
 ```
+
+Sustituye `codex` por `claude` para generar una solicitud para Claude Code.
 
 ## Compilar y probar
 

@@ -4,6 +4,7 @@
 
 Fecha de inspección: 2026-07-28.
 Actualización de Codex CLI: 2026-08-04.
+Validación del adaptador Claude Code: 2026-08-26.
 
 Versiones encontradas en la máquina:
 
@@ -113,8 +114,25 @@ posterior, por lo que la baseline local `2.1.22` no debe anunciarlo como
 capacidad disponible.
 
 Efecto lateral detectado: la consulta local intentó escribir un debug log en
-`~/.claude/debug`. El adaptador deberá controlar `CLAUDE_CONFIG_DIR`, debug
-paths, permisos y directorios de estado dentro de su política de aislamiento.
+`~/.claude/debug`. El adaptador redirige ese log a un archivo temporal dentro
+de `audit/` y lo elimina al finalizar, sin cambiar el directorio de
+autenticación de Claude.
+
+Capacidades comprobadas mediante CreateAgent con Claude Code `2.1.22` y el
+alias de modelo `sonnet`:
+
+- ejecución `-p` con eventos `stream-json`;
+- selección de modelo;
+- herramientas `Read` y `Write`;
+- creación de archivos dentro del workspace;
+- JSON estructurado mediante `--json-schema`;
+- lectura de un directorio externo con escritura rechazada;
+- sesión efímera;
+- probe de versión.
+
+En esta baseline CreateAgent anuncia únicamente `performance: normal` y
+`reasoning.effort: medium`. Los niveles adicionales y fast mode permanecen
+deshabilitados hasta validarlos con una versión compatible.
 
 ## 4. Gemini CLI
 

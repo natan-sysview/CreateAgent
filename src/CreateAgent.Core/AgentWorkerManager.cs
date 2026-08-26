@@ -376,7 +376,14 @@ public sealed class AgentWorkerManager : IAgentWorkerManager, IDisposable
                 {
                     try
                     {
-                        File.Delete(temporaryFile);
+                        if (Directory.Exists(temporaryFile))
+                        {
+                            Directory.Delete(temporaryFile, recursive: true);
+                        }
+                        else
+                        {
+                            File.Delete(temporaryFile);
+                        }
                     }
                     catch (Exception exception)
                     {

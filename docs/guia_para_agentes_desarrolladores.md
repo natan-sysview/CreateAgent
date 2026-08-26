@@ -5,6 +5,7 @@
 1. [Modelo mental](#1-modelo-mental)
 2. [Integración recomendada](#2-integración-recomendada)
    - [Valores de Codex comprobados](#valores-de-codex-comprobados)
+   - [Valores de Claude comprobados](#valores-de-claude-comprobados)
 3. [Patrones y responsabilidades](#3-patrones-y-responsabilidades)
 4. [Manejo de errores](#4-manejo-de-errores)
 5. [Auditoría y diagnóstico](#5-auditoría-y-diagnóstico)
@@ -146,6 +147,21 @@ alto comprobado en la versión actual:
 actualizar a `0.146.0`. Vuelve a comprobar la matriz cuando cambie la versión
 instalada del CLI.
 
+### Valores de Claude comprobados
+
+| Claude Code | `providerName` | `model` | `performance` | `reasoning.effort` | Resultado |
+|---|---|---|---|---|---|
+| `2.1.22` | `claude` | `sonnet` | `normal` | `medium` | Comprobado |
+
+La prueba real creó `hola.py`, devolvió un objeto JSON y confirmó que una ruta
+de `workspace.readOnlyPaths` podía leerse pero no modificarse. En esta versión
+no uses `fast`, `medium` como velocidad ni esfuerzos distintos de `medium`:
+CreateAgent los rechaza porque todavía no están comprobados.
+
+Claude recibe los nombres de `tools` tal como se escriben. Por ejemplo,
+`["Read", "Write"]` limita la ejecución a esas herramientas. Si el workspace
+contiene `.mcp.json`, el adaptador usa exclusivamente esa configuración MCP.
+
 ## 3. Patrones y responsabilidades
 
 ### Manager reutilizable
@@ -163,8 +179,9 @@ en `IAgentCliAdapter`; no repartas condicionales de proveedores por el núcleo.
 La aplicación prepara skills, SDD, `AGENTS.md`, `.claude`, PDFs, bases SQLite o
 código. Usa `workspace.sources` cuando deban copiarse y
 `workspace.readOnlyPaths` cuando deban permanecer fuera del workspace sin
-posibilidad de modificación. No uses `--add-dir` para simular solo lectura en
-Codex: concede escritura.
+posibilidad de modificación. No uses `--add-dir` directamente para simular
+solo lectura en Codex o Claude. Deja que cada adaptador aplique sus permisos y
+sandbox.
 
 ### Resultado definitivo
 

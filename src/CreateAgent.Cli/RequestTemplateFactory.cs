@@ -7,6 +7,7 @@ internal static class RequestTemplateFactory
         var providerName = provider.ToLowerInvariant() switch
         {
             "codex" or "openai.codex" => "codex",
+            "claude" or "anthropic.claude" => "claude",
             _ => throw new CliUsageException(
                 $"Provider '{provider}' is not supported by this CLI version."),
         };

@@ -8,6 +8,21 @@ public static class Program
 {
     public static async Task<int> Main(string[] args)
     {
+        if (args.Contains("--version", StringComparer.Ordinal))
+        {
+            Console.Out.WriteLine("fake-cli 1.0");
+            return 0;
+        }
+
+        if (args.Contains("-p", StringComparer.Ordinal) &&
+            string.Equals(
+                GetOption(args, "--output-format"),
+                "stream-json",
+                StringComparison.Ordinal))
+        {
+            return await RunClaudeAsync(args).ConfigureAwait(false);
+        }
+
         var mode = GetOption(args, "--mode") ?? "success";
         var delayMilliseconds = int.TryParse(
             GetOption(args, "--delay-ms"),
@@ -117,6 +132,79 @@ public static class Program
         }
 
         WriteEvent(new { type = "turn.completed" });
+        return 0;
+    }
+
+    private static async Task<int> RunClaudeAsync(string[] args)
+    {
+        var prompt = await Console.In.ReadToEndAsync().ConfigureAwait(false);
+        WriteEvent(
+            new
+            {
+                type = "system",
+                subtype = "init",
+                session_id = "fake-claude-session-001",
+            });
+        WriteEvent(
+            new
+            {
+                type = "assistant",
+                message = new
+                {
+                    content = new[]
+                    {
+                        new
+                        {
+                            type = "tool_use",
+                            name = "Write",
+                        },
+                    },
+                },
+            });
+        WriteEvent(
+            new
+            {
+                type = "user",
+                message = new
+                {
+                    content = new[]
+                    {
+                        new
+                        {
+                            type = "tool_result",
+                            content = "File written successfully",
+                        },
+                    },
+                },
+            });
+
+        if (GetOption(args, "--json-schema") is not null)
+        {
+            WriteEvent(
+                new
+                {
+                    type = "result",
+                    subtype = "success",
+                    is_error = false,
+                    structured_output = new
+                    {
+                        nombre = "Claude",
+                        estado = "funcionando",
+                    },
+                });
+        }
+        else
+        {
+            WriteEvent(
+                new
+                {
+                    type = "result",
+                    subtype = "success",
+                    is_error = false,
+                    result = $"fake claude completed: {prompt.Trim()}",
+                });
+        }
+
         return 0;
     }
 

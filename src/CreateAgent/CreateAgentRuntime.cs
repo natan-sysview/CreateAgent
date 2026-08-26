@@ -1,4 +1,5 @@
 using CreateAgent.Core;
+using CreateAgent.Providers.ClaudeCode;
 using CreateAgent.Providers.Codex;
 using CreateAgent.Runtime.Processes;
 using CreateAgent.Storage.FileSystem;
@@ -9,7 +10,8 @@ public static class CreateAgentRuntime
 {
     public static IAgentWorkerManager CreateDefault(
         CreateAgentOptions options,
-        string codexExecutable = "codex")
+        string codexExecutable = "codex",
+        string claudeExecutable = "claude")
     {
         ArgumentNullException.ThrowIfNull(options);
 
@@ -18,9 +20,10 @@ public static class CreateAgentRuntime
         var auditFactory = new JsonLineAuditFactory();
         var failureBundler = new ZipFailureBundler(options.StorageRoot);
         var codexAdapter = new CodexCliAdapter(processRunner, codexExecutable);
+        var claudeAdapter = new ClaudeCodeCliAdapter(processRunner, claudeExecutable);
 
         return new AgentWorkerManager(
-            [codexAdapter],
+            [codexAdapter, claudeAdapter],
             processRunner,
             workspaceProvider,
             auditFactory,

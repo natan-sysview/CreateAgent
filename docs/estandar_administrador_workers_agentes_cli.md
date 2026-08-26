@@ -1048,7 +1048,8 @@ La versión inicial se considerará funcional cuando:
 20. La superficie principal seguirá siendo la biblioteca NuGet. Se incluye
     `CreateAgent.Cli` como host delgado de referencia y herramienta de pruebas;
     API y bindings permanecen como hosts posteriores.
-21. Codex CLI será el primer adaptador real.
+21. Codex CLI fue el primer adaptador real; Claude Code es el segundo adaptador
+    implementado.
 22. La estrategia inicial de workspace será copia aislada; Git worktree quedará
     como extensión posterior.
 23. La persistencia inicial usará filesystem, cambios de archivos en JSON y

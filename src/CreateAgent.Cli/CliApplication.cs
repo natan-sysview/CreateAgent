@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using CreateAgent.Core;
+using CreateAgent.Providers.ClaudeCode;
 using CreateAgent.Providers.Codex;
 using CreateAgent.Runtime.Processes;
 
@@ -15,6 +16,7 @@ public static class CliApplication
             "--config",
             "--storage",
             "--codex-path",
+            "--claude-path",
             "--max-concurrent",
             "--event-capacity",
             "--process-output-capacity",
@@ -183,7 +185,8 @@ public static class CliApplication
 
         await using var manager = CreateAgentRuntime.CreateDefault(
             host.ToCreateAgentOptions(),
-            host.CodexExecutable);
+            host.CodexExecutable,
+            host.ClaudeExecutable);
         var handle = await manager.StartAsync(request, cancellationToken)
             .ConfigureAwait(false);
         using var cancellationRegistration = cancellationToken.Register(
@@ -244,7 +247,7 @@ public static class CliApplication
         if (parsed.HasFlag("--help"))
         {
             throw new CliUsageException(
-                "Usage: createagent request init --provider codex [--output request.json] [--force]");
+                "Usage: createagent request init --provider <codex|claude> [--output request.json] [--force]");
         }
 
         RequirePositionals(parsed, 0, "request init");
@@ -347,20 +350,22 @@ public static class CliApplication
         CancellationToken cancellationToken)
     {
         var parsed = CliArguments.Parse(args, CommonValueOptions, HelpFlag);
-        RequirePositionals(parsed, 2, "provider probe <codex|openai.codex>");
+        RequirePositionals(
+            parsed,
+            2,
+            "provider probe <codex|openai.codex|claude|anthropic.claude>");
         if (parsed.Positionals[0] != "probe")
         {
             throw new CliUsageException(
                 $"Unknown provider command '{parsed.Positionals[0]}'.");
         }
 
-        EnsureCodexProvider(parsed.Positionals[1]);
         var host = await CliHostConfigurationLoader
             .LoadAsync(parsed, cancellationToken)
             .ConfigureAwait(false);
         var runner = new SystemProcessRunner(
             host.ProcessOutputChannelCapacity);
-        var adapter = new CodexCliAdapter(runner, host.CodexExecutable);
+        var adapter = CreateAdapter(parsed.Positionals[1], runner, host);
         var capabilities = await adapter.ProbeAsync(cancellationToken)
             .ConfigureAwait(false);
         await output.WriteCapabilitiesAsync(capabilities).ConfigureAwait(false);
@@ -390,12 +395,16 @@ public static class CliApplication
         }
 
         var runner = new SystemProcessRunner(host.ProcessOutputChannelCapacity);
-        var capabilities = await new CodexCliAdapter(runner, host.CodexExecutable)
-            .ProbeAsync(cancellationToken)
+        var capabilities = await Task.WhenAll(
+                new CodexCliAdapter(runner, host.CodexExecutable)
+                    .ProbeAsync(cancellationToken),
+                new ClaudeCodeCliAdapter(runner, host.ClaudeExecutable)
+                    .ProbeAsync(cancellationToken))
             .ConfigureAwait(false);
+        var ready = capabilities.All(static capability => capability.IsAvailable);
         await output.WriteStatusAsync(
                 "doctor",
-                capabilities.IsAvailable
+                ready
                     ? "CreateAgent host is ready."
                     : "CreateAgent host requires attention.",
                 new
@@ -404,15 +413,18 @@ public static class CliApplication
                     os = RuntimeInformation.OSDescription,
                     architecture = RuntimeInformation.ProcessArchitecture.ToString(),
                     storageRoot = host.StorageRoot,
-                    provider = capabilities,
+                    providers = capabilities,
                 })
             .ConfigureAwait(false);
         if (output.Format == CliOutputFormat.Human)
         {
-            await output.WriteCapabilitiesAsync(capabilities).ConfigureAwait(false);
+            foreach (var capability in capabilities)
+            {
+                await output.WriteCapabilitiesAsync(capability).ConfigureAwait(false);
+            }
         }
 
-        return capabilities.IsAvailable
+        return ready
             ? (int)CliExitCode.Success
             : (int)CliExitCode.ProviderUnavailable;
     }
@@ -483,13 +495,20 @@ public static class CliApplication
         }
     }
 
-    private static void EnsureCodexProvider(string provider)
+    private static IAgentCliAdapter CreateAdapter(
+        string provider,
+        IAgentProcessRunner runner,
+        ResolvedCliHostConfiguration host)
     {
-        if (provider is not ("codex" or "openai.codex"))
+        return provider.ToLowerInvariant() switch
         {
-            throw new CliUsageException(
-                $"Provider '{provider}' is not supported by this CLI version.");
-        }
+            "codex" or "openai.codex" =>
+                new CodexCliAdapter(runner, host.CodexExecutable),
+            "claude" or "anthropic.claude" =>
+                new ClaudeCodeCliAdapter(runner, host.ClaudeExecutable),
+            _ => throw new CliUsageException(
+                $"Provider '{provider}' is not supported by this CLI version."),
+        };
     }
 
     private static CliOutputFormat TryDetectFormat(IReadOnlyList<string> args)
@@ -541,10 +560,10 @@ public static class CliApplication
         CreateAgent CLI - reference host for CreateAgent
 
         Usage:
-          createagent request init --provider codex [--output request.json] [--force]
+          createagent request init --provider <codex|claude> [--output request.json] [--force]
           createagent request validate <request.json> [--output human|jsonl]
           createagent host init [--output host.json] [--force]
-          createagent provider probe <codex|openai.codex> [host options]
+          createagent provider probe <codex|openai.codex|claude|anthropic.claude> [host options]
           createagent doctor [host options]
           createagent schema print
           createagent run <request.json> [host options] [--output human|jsonl]
@@ -555,6 +574,7 @@ public static class CliApplication
           --config <host.json>
           --storage <directory>
           --codex-path <executable>
+          --claude-path <executable>
           --max-concurrent <number>
           --event-capacity <number>
           --process-output-capacity <number>

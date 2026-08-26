@@ -36,6 +36,19 @@ public sealed class CliApplicationTests
     }
 
     [Fact]
+    public async Task RequestInitSupportsClaude()
+    {
+        var initialized = await RunAsync(
+            ["request", "init", "--provider", "claude", "--output", "-"]);
+
+        Assert.Equal((int)CliExitCode.Success, initialized.ExitCode);
+        using var request = JsonDocument.Parse(initialized.StandardOutput);
+        Assert.Equal(
+            "claude",
+            request.RootElement.GetProperty("providerName").GetString());
+    }
+
+    [Fact]
     public async Task RelativeWorkspacePathIsResolvedFromRequestFile()
     {
         using var temporary = new TemporaryDirectory();
@@ -126,6 +139,30 @@ public sealed class CliApplicationTests
     }
 
     [Fact]
+    public async Task ProbeUsesConfiguredClaudeExecutable()
+    {
+        var result = await RunAsync(
+            [
+                "provider",
+                "probe",
+                "claude",
+                "--claude-path",
+                FakeCliPath(),
+                "--output",
+                "jsonl",
+            ]);
+
+        Assert.Equal((int)CliExitCode.Success, result.ExitCode);
+        using var capabilities = JsonDocument.Parse(result.StandardOutput.Trim());
+        Assert.Equal(
+            "anthropic.claude",
+            capabilities.RootElement
+                .GetProperty("data")
+                .GetProperty("providerId")
+                .GetString());
+    }
+
+    [Fact]
     public async Task RunStreamsJsonLinesAndCanBeInspected()
     {
         using var temporary = new TemporaryDirectory();
@@ -174,6 +211,54 @@ public sealed class CliApplicationTests
         Assert.Equal(
             "result",
             inspectedJson.RootElement.GetProperty("type").GetString());
+    }
+
+    [Fact]
+    public async Task RunExecutesClaudeThroughTheSharedContract()
+    {
+        using var temporary = new TemporaryDirectory();
+        var requestPath = Path.Combine(temporary.Path, "claude-request.json");
+        var storage = Path.Combine(temporary.Path, "storage");
+        await File.WriteAllTextAsync(
+            requestPath,
+            CreateAgentJson.SerializeRequest(
+                CreateRequest() with { ProviderName = "claude" }));
+
+        var run = await RunAsync(
+            [
+                "run",
+                requestPath,
+                "--claude-path",
+                FakeCliPath(),
+                "--storage",
+                storage,
+                "--output",
+                "jsonl",
+            ]);
+
+        Assert.Equal((int)CliExitCode.Success, run.ExitCode);
+        Assert.Contains("fake claude completed", run.StandardOutput, StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            Directory.GetFiles(storage, "*", SearchOption.AllDirectories),
+            static path => path.EndsWith(
+                ".claude-debug.tmp.log",
+                StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task HostTemplateIncludesBothProviderExecutables()
+    {
+        var result = await RunAsync(["host", "init", "--output", "-"]);
+
+        Assert.Equal((int)CliExitCode.Success, result.ExitCode);
+        using var host = JsonDocument.Parse(result.StandardOutput);
+        var providers = host.RootElement.GetProperty("providers");
+        Assert.Equal(
+            "codex",
+            providers.GetProperty("codex").GetProperty("executable").GetString());
+        Assert.Equal(
+            "claude",
+            providers.GetProperty("claude").GetProperty("executable").GetString());
     }
 
     [Fact]

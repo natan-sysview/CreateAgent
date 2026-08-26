@@ -4,8 +4,8 @@
 
 - Versión: `0.1.0-alpha.1`.
 - Runtime: .NET 10.
-- Adaptador productivo inicial: Codex CLI.
-- Baseline inspeccionada: Codex CLI `0.146.0`.
+- Adaptadores productivos: Codex CLI y Claude Code.
+- Baselines inspeccionadas: Codex CLI `0.146.0` y Claude Code `2.1.22`.
 - Distribución: paquetes NuGet locales; publicación pública pendiente.
 
 ## Implementado
@@ -35,9 +35,10 @@
 | Salida humana y JSONL | Implementado |
 | Diagnóstico de host y probe de proveedor | Implementado |
 | Cancelación por `Ctrl+C` | Implementado |
-| Adaptador Claude Code | Pendiente |
+| Adaptador Claude Code | Implementado y comprobado con Claude Code `2.1.22` |
 | Adaptador Gemini CLI | Pendiente |
-| Resolución de perfiles MCP/herramientas | Contrato listo; host resolver pendiente |
+| Herramientas Claude | Allowlist mediante `tools`; MCP mediante `.mcp.json` copiado al workspace |
+| Resolución de perfiles de herramientas Codex | Pendiente |
 | Persistencia SQLite | Extensión futura; v0.1 usa filesystem |
 | Recuperación después de caída del host | Pendiente |
 | Publicación NuGet | Pendiente de licencia, repositorio y datos editoriales |
@@ -54,6 +55,22 @@ aprobaciones desactivadas y escritura limitada al workspace. Rechaza:
 
 No se degradan silenciosamente modelo, velocidad, esfuerzo, permisos ni
 seguridad.
+
+## Política de capacidades en Claude Code v0.1
+
+El adaptador usa `claude -p` con eventos `stream-json`, permisos no
+interactivos y sandbox. Soporta modelo, sesiones, salida estructurada,
+herramientas, `.mcp.json`, skills e instrucciones preparadas en el workspace.
+
+Para la baseline local `2.1.22` solamente anuncia:
+
+- `performance: normal`;
+- `reasoning.effort: medium`, que conserva el esfuerzo normal del proveedor.
+
+Fast mode requiere Claude Code `2.1.36` o posterior y no se anuncia todavía.
+Los valores no comprobados se rechazan claramente, sin degradación silenciosa.
+Las rutas externas de solo lectura se protegen tanto para herramientas de
+edición como para comandos ejecutados dentro del sandbox.
 
 ## Validación automatizada
 
@@ -80,7 +97,10 @@ La suite usa un CLI falso compilado como proceso independiente y cubre:
 - contrato JSON estricto;
 - contrato de entrada simplificado;
 - argumentos no interactivos del adaptador;
-- probe seguro de la instalación local mediante `codex --version`.
+- probe seguro de la instalación local mediante `codex --version`;
+- argumentos, eventos, sesiones y seguridad del adaptador Claude Code;
+- ejecución compartida de Claude a través del wrapper;
+- probe seguro mediante `claude --version`.
 
 Las pruebas específicas del wrapper cubren además:
 
@@ -94,6 +114,10 @@ Las pruebas específicas del wrapper cubren además:
 - escritura atómica sin sobrescritura accidental;
 - rechazo limpio de configuraciones de proveedor incompletas.
 
-La suite actual contiene 32 pruebas: 22 del runtime y 10 del wrapper CLI.
+La suite actual contiene 45 pruebas: 31 de biblioteca/runtime y 14 del wrapper
+CLI.
 
-Las pruebas ordinarias nunca invocan una sesión real de IA.
+Las pruebas ordinarias nunca invocan una sesión real de IA. Además se completó
+una prueba manual con Claude Code `2.1.22`, modelo `sonnet`: creó un archivo,
+devolvió JSON estructurado y no pudo modificar una referencia externa de solo
+lectura.

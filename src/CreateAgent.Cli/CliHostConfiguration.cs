@@ -22,6 +22,8 @@ public sealed record CliHostConfiguration
 public sealed record CliProviderConfiguration
 {
     public CliCodexConfiguration? Codex { get; init; } = new();
+
+    public CliClaudeConfiguration? Claude { get; init; } = new();
 }
 
 public sealed record CliCodexConfiguration
@@ -29,12 +31,18 @@ public sealed record CliCodexConfiguration
     public string Executable { get; init; } = "codex";
 }
 
+public sealed record CliClaudeConfiguration
+{
+    public string Executable { get; init; } = "claude";
+}
+
 internal sealed record ResolvedCliHostConfiguration(
     string StorageRoot,
     int MaxConcurrentRuns,
     int EventChannelCapacity,
     int ProcessOutputChannelCapacity,
-    string CodexExecutable)
+    string CodexExecutable,
+    string ClaudeExecutable)
 {
     public CreateAgentOptions ToCreateAgentOptions() =>
         new()
@@ -95,6 +103,8 @@ internal static class CliHostConfigurationLoader
                            ".createagent";
         var codexValue = arguments.GetValue("--codex-path") ??
                          configuration.Providers?.Codex?.Executable;
+        var claudeValue = arguments.GetValue("--claude-path") ??
+                          configuration.Providers?.Claude?.Executable;
 
         var maxConcurrent = arguments.GetPositiveInt32("--max-concurrent") ??
                             configuration.MaxConcurrentRuns ??
@@ -119,6 +129,12 @@ internal static class CliHostConfigurationLoader
                 "Host Providers.Codex.Executable is required and cannot be empty.");
         }
 
+        else if (string.IsNullOrWhiteSpace(claudeValue))
+        {
+            errors.Add(
+                "Host Providers.Claude.Executable is required and cannot be empty.");
+        }
+
         if (maxConcurrent <= 0)
         {
             errors.Add("Host MaxConcurrentRuns must be greater than zero.");
@@ -141,12 +157,14 @@ internal static class CliHostConfigurationLoader
 
         var storage = ResolvePath(baseDirectory, storageValue);
         var codex = ResolveExecutablePath(baseDirectory, codexValue!);
+        var claude = ResolveExecutablePath(baseDirectory, claudeValue!);
         return new ResolvedCliHostConfiguration(
             storage,
             maxConcurrent,
             eventCapacity,
             processCapacity,
-            codex);
+            codex,
+            claude);
     }
 
     public static string SerializeTemplate() =>

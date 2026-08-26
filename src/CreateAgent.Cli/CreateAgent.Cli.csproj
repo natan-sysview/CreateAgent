@@ -12,6 +12,7 @@
   <ItemGroup>
     <ProjectReference Include="..\CreateAgent\CreateAgent.csproj" />
     <ProjectReference Include="..\CreateAgent.Core\CreateAgent.Core.csproj" />
+    <ProjectReference Include="..\CreateAgent.Providers.ClaudeCode\CreateAgent.Providers.ClaudeCode.csproj" />
     <ProjectReference Include="..\CreateAgent.Providers.Codex\CreateAgent.Providers.Codex.csproj" />
     <ProjectReference Include="..\CreateAgent.Runtime.Processes\CreateAgent.Runtime.Processes.csproj" />
   </ItemGroup>

@@ -57,8 +57,9 @@ Nombre humano de la ejecución. También se usa para crear un directorio legible
 
 ### `providerName`
 
-Adaptador solicitado, por ejemplo `codex`. En el futuro podrá aceptar `claude`
-o `gemini` cuando existan sus adaptadores.
+Adaptador solicitado. Los valores implementados son `codex` y `claude`; también
+se aceptan los identificadores completos `openai.codex` y
+`anthropic.claude`.
 
 ### `model`
 
@@ -87,6 +88,10 @@ Las combinaciones ejecutadas con éxito están registradas en
 En el menú de Codex, las etiquetas `Mínimo`, `Medio`, `Alto`, `Muy alta` y
 `Ultra` corresponden respectivamente a `low`, `medium`, `high`, `xhigh` y
 `ultra`.
+
+Con Claude Code `2.1.22`, el único valor comprobado es `medium`, que conserva
+el nivel normal del proveedor. Otros niveles se rechazan hasta comprobarlos en
+una versión compatible.
 
 ### `session`
 
@@ -173,6 +178,9 @@ copia al workspace y se elimina después de ejecutar. El objeto validado queda
 disponible en `AgentRunResult.StructuredOutput` y se registra en
 `audit/output.json`. En este modo no se duplica como texto en `FinalMessage`.
 
+Claude recibe el mismo esquema directamente mediante `--json-schema`; tampoco
+crea un archivo de resultado adicional.
+
 `--json` y `outputSchema` resuelven necesidades distintas: el primero produce
 eventos JSONL en tiempo real; el segundo controla el objeto final.
 
@@ -232,22 +240,30 @@ solo lectura:
 - En Codex no se usa `--add-dir` para este caso porque ese argumento concede
   escritura. Se aplica un perfil de permisos de lectura (Codex CLI 0.138.0 o
   posterior).
+- En Claude se combina `--add-dir` con reglas que deniegan edición y escritura
+  desde el sandbox. `--add-dir` por sí solo no representa solo lectura.
 
 ## 6. Herramientas
 
-`tools` contiene nombres de herramientas registradas por la aplicación host:
+`tools` contiene nombres de herramientas disponibles para el proveedor:
 
 ```json
 {
   "tools": [
-    "servidor-mcp-sqlite",
-    "validador-interno"
+    "Read",
+    "Write"
   ]
 }
 ```
 
-La versión actual conserva el contrato, pero Codex v0.1 rechaza listas no
-vacías hasta que exista el resolvedor de herramientas del host.
+En Claude, una lista vacía conserva las herramientas predeterminadas. Una lista
+con valores se envía como allowlist exacta mediante `--tools` y
+`--allowedTools`. Para MCP, el consumidor copia un `.mcp.json` al workspace y
+puede usar nombres como `mcp__servidor__herramienta`. El adaptador usa
+configuración MCP estricta para no cargar servidores ajenos al workspace.
+
+Codex v0.1 todavía rechaza listas no vacías hasta que exista su resolvedor de
+herramientas.
 
 ## 7. Valores internos
 
