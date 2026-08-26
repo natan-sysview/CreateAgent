@@ -208,7 +208,7 @@ public sealed class ClaudeCodeCliAdapterTests
     [Theory]
     [InlineData(AgentPerformanceMode.Fast, "medium")]
     [InlineData(AgentPerformanceMode.Medium, "medium")]
-    [InlineData(AgentPerformanceMode.Normal, "high")]
+    [InlineData(AgentPerformanceMode.Normal, "xhigh")]
     public async Task RejectsUnverifiedPerformanceAndReasoningValues(
         AgentPerformanceMode performance,
         string effort)
@@ -228,6 +228,62 @@ public sealed class ClaudeCodeCliAdapterTests
 
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => adapter.CreateLaunchPlanAsync(request, CreateWorkspace(temporary)));
+    }
+
+    [Theory]
+    [InlineData("low")]
+    [InlineData("high")]
+    public async Task UsesEnvironmentForLegacyClaudeReasoning(string effort)
+    {
+        using var temporary = new TemporaryDirectory();
+        var adapter = new ClaudeCodeCliAdapter(
+            new SystemProcessRunner(),
+            FakeCliPath());
+        var request = new AgentRunRequest
+        {
+            Name = "Legacy Claude reasoning",
+            ProviderName = "claude",
+            Prompt = "test",
+            Reasoning = new AgentReasoningOptions { Effort = effort },
+        };
+
+        var plan = await adapter.CreateLaunchPlanAsync(
+            request,
+            CreateWorkspace(temporary));
+
+        Assert.Equal(effort, plan.Environment["CLAUDE_CODE_EFFORT_LEVEL"]);
+        Assert.DoesNotContain("--effort", plan.Arguments);
+    }
+
+    [Theory]
+    [InlineData("xhigh")]
+    [InlineData("max")]
+    public async Task UsesEffortFlagForCurrentClaude(string effort)
+    {
+        using var temporary = new TemporaryDirectory();
+        var adapter = new ClaudeCodeCliAdapter(
+            new SystemProcessRunner(),
+            FakeCliPath());
+        var capabilities = await adapter.ProbeAsync();
+        var request = new AgentRunRequest
+        {
+            Name = "Current Claude options",
+            ProviderName = "claude",
+            Model = "claude-opus-4-6",
+            Reasoning = new AgentReasoningOptions { Effort = effort },
+            Prompt = "test",
+        };
+
+        var plan = await adapter.CreateLaunchPlanAsync(
+            request,
+            CreateWorkspace(temporary));
+
+        Assert.DoesNotContain("fast", capabilities.SupportedPerformanceModes);
+        Assert.Contains(effort, capabilities.SupportedReasoningEfforts);
+        AssertOption(plan.Arguments, "--effort", effort);
+        Assert.DoesNotContain("CLAUDE_CODE_EFFORT_LEVEL", plan.Environment.Keys);
+        using var settings = JsonDocument.Parse(GetOption(plan.Arguments, "--settings"));
+        Assert.False(settings.RootElement.GetProperty("fastMode").GetBoolean());
     }
 
     [Fact]

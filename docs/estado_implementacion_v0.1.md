@@ -5,7 +5,8 @@
 - Versión: `0.1.0-alpha.1`.
 - Runtime: .NET 10.
 - Adaptadores productivos: Codex CLI y Claude Code.
-- Baselines inspeccionadas: Codex CLI `0.146.0` y Claude Code `2.1.22`.
+- Baselines inspeccionadas: Codex CLI `0.146.0`; Claude Code `2.1.22` y
+  `2.1.246`.
 - Distribución: paquetes NuGet locales; publicación pública pendiente.
 
 ## Implementado
@@ -35,7 +36,7 @@
 | Salida humana y JSONL | Implementado |
 | Diagnóstico de host y probe de proveedor | Implementado |
 | Cancelación por `Ctrl+C` | Implementado |
-| Adaptador Claude Code | Implementado y comprobado con Claude Code `2.1.22` |
+| Adaptador Claude Code | Implementado y comprobado con Claude Code `2.1.22` y `2.1.246` |
 | Adaptador Gemini CLI | Pendiente |
 | Herramientas Claude | Allowlist mediante `tools`; MCP mediante `.mcp.json` copiado al workspace |
 | Resolución de perfiles de herramientas Codex | Pendiente |
@@ -62,13 +63,19 @@ El adaptador usa `claude -p` con eventos `stream-json`, permisos no
 interactivos y sandbox. Soporta modelo, sesiones, salida estructurada,
 herramientas, `.mcp.json`, skills e instrucciones preparadas en el workspace.
 
-Para la baseline local `2.1.22` solamente anuncia:
+El probe inspecciona la ayuda del ejecutable antes de anunciar capacidades:
 
 - `performance: normal`;
-- `reasoning.effort: medium`, que conserva el esfuerzo normal del proveedor.
+- Claude `2.1.22`: `reasoning.effort` `low`, `medium` y `high`, aplicados con
+  `CLAUDE_CODE_EFFORT_LEVEL`;
+- Claude `2.1.246`: `low`, `medium`, `high`, `xhigh` y `max`, aplicados con
+  `--effort`.
 
-Fast mode requiere Claude Code `2.1.36` o posterior y no se anuncia todavía.
-Los valores no comprobados se rechazan claramente, sin degradación silenciosa.
+Claude no ofrece una velocidad `medium`. Fast mode requiere Claude Code
+`2.1.36` o posterior, Opus 4.6 y extra usage. La prueba con `2.1.246` y Opus
+4.6 informó `extra_usage_disabled` y velocidad efectiva `standard`, por lo que
+CreateAgent no anuncia `fast` todavía. Los valores no disponibles se rechazan
+claramente, sin degradación silenciosa.
 Las rutas externas de solo lectura se protegen tanto para herramientas de
 edición como para comandos ejecutados dentro del sandbox.
 
@@ -114,10 +121,11 @@ Las pruebas específicas del wrapper cubren además:
 - escritura atómica sin sobrescritura accidental;
 - rechazo limpio de configuraciones de proveedor incompletas.
 
-La suite actual contiene 45 pruebas: 31 de biblioteca/runtime y 14 del wrapper
+La suite actual contiene 49 pruebas: 35 de biblioteca/runtime y 14 del wrapper
 CLI.
 
-Las pruebas ordinarias nunca invocan una sesión real de IA. Además se completó
-una prueba manual con Claude Code `2.1.22`, modelo `sonnet`: creó un archivo,
-devolvió JSON estructurado y no pudo modificar una referencia externa de solo
-lectura.
+Las pruebas ordinarias nunca invocan una sesión real de IA. Las pruebas
+manuales con Claude Code comprobaron `sonnet` y esfuerzos `low`, `medium` y
+`high` en `2.1.22`; `claude-opus-4-6` con `xhigh` y `max` en `2.1.246`; la
+creación de un archivo; JSON estructurado; y la protección de una referencia
+externa de solo lectura.

@@ -10,7 +10,13 @@ public static class Program
     {
         if (args.Contains("--version", StringComparer.Ordinal))
         {
-            Console.Out.WriteLine("fake-cli 1.0");
+            Console.Out.WriteLine("2.1.246 (Claude Code fake)");
+            return 0;
+        }
+
+        if (args.Contains("--help", StringComparer.Ordinal))
+        {
+            Console.Out.WriteLine("--effort <level>");
             return 0;
         }
 

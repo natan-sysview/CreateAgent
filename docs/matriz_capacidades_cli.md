@@ -6,11 +6,12 @@ Fecha de inspección: 2026-07-28.
 Actualización de Codex CLI: 2026-08-04.
 Validación del adaptador Claude Code: 2026-08-26.
 
-Versiones encontradas en la máquina:
+Versiones encontradas en la máquina y baseline temporal de prueba:
 
 ```text
 Codex CLI    0.146.0
 Claude Code  2.1.22
+Claude Code  2.1.246 (instalación temporal, no sustituyó al CLI global)
 Gemini CLI   0.40.0
 ```
 
@@ -83,7 +84,7 @@ TUI.
 
 ## 3. Claude Code
 
-Baseline local: `2.1.22`.
+Baseline local: `2.1.22`. Baseline actual probada de forma aislada: `2.1.246`.
 
 Capacidades verificadas en ayuda local:
 
@@ -103,15 +104,16 @@ Capacidades verificadas en ayuda local:
 - system prompt y append system prompt;
 - plugins y custom agents.
 
-La documentación actual también describe `--effort`, pero la ayuda local
-`2.1.22` no lo muestra. La documentación advierte que `claude --help` no enumera
-todos los flags; el adaptador deberá usar una tabla de compatibilidad por
-versión y una prueba segura.
+La ayuda de `2.1.22` no muestra `--effort`; en esa versión se comprobaron
+`low`, `medium` y `high` mediante `CLAUDE_CODE_EFFORT_LEVEL`. La ayuda de
+`2.1.246` sí publica `--effort` y acepta `low`, `medium`, `high`, `xhigh` y
+`max`. El probe detecta el argumento y anuncia la lista correspondiente.
 
-Fast mode requiere una versión y modelo compatibles y puede incrementar el
-coste. La documentación actual indica como requisito Claude Code `2.1.36` o
-posterior, por lo que la baseline local `2.1.22` no debe anunciarlo como
-capacidad disponible.
+Fast mode requiere Claude Code `2.1.36` o posterior, Opus 4.6, extra usage
+habilitado y puede incrementar el coste. La prueba con `2.1.246` y
+`claude-opus-4-6` informó `fast_mode_state: off`, razón
+`extra_usage_disabled` y velocidad efectiva `standard`. Por tanto, CreateAgent
+no anuncia `fast` en el entorno verificado.
 
 Efecto lateral detectado: la consulta local intentó escribir un debug log en
 `~/.claude/debug`. El adaptador redirige ese log a un archivo temporal dentro
@@ -130,9 +132,22 @@ alias de modelo `sonnet`:
 - sesión efímera;
 - probe de versión.
 
-En esta baseline CreateAgent anuncia únicamente `performance: normal` y
-`reasoning.effort: medium`. Los niveles adicionales y fast mode permanecen
-deshabilitados hasta validarlos con una versión compatible.
+También se comprobaron ejecuciones reales con código de salida `0` para:
+
+| Claude Code | Modelo | `reasoning.effort` |
+|---|---|---|
+| `2.1.22` | `sonnet` | `low`, `medium`, `high` |
+| `2.1.246` | `claude-opus-4-6` | `xhigh`, `max` |
+
+Los modelos pueden solicitarse por nombre completo o por los alias oficiales
+`default`, `best`, `sonnet`, `opus`, `haiku`, `sonnet[1m]`, `opus[1m]` y
+`opusplan`. Los alias pueden cambiar; el nombre completo fija una versión.
+CreateAgent solo ha probado `sonnet` y `claude-opus-4-6`, y deja al proveedor
+validar el acceso a cualquier otro nombre solicitado.
+
+En Claude, CreateAgent anuncia `performance: normal`; no existe una velocidad
+`medium` independiente. Fast permanece deshabilitado hasta que una cuenta de
+prueba confirme velocidad efectiva `fast`.
 
 ## 4. Gemini CLI
 
@@ -268,6 +283,7 @@ Además de modelo, velocidad, sesión, inteligencia, prompt y herramientas:
 - [Codex skills](https://developers.openai.com/codex/skills/)
 - [Codex MCP](https://developers.openai.com/codex/mcp/)
 - [Claude Code CLI reference](https://code.claude.com/docs/en/cli-usage)
+- [Claude Code model and effort configuration](https://code.claude.com/docs/en/model-config)
 - [Claude Code programmatic mode](https://code.claude.com/docs/en/headless)
 - [Claude Code instructions](https://code.claude.com/docs/en/memory)
 - [Claude Code skills](https://code.claude.com/docs/en/slash-commands)

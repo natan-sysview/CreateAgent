@@ -6,11 +6,21 @@ public sealed class ClaudeCodeCliAdapter : IAgentCliAdapter
 {
     private static readonly HashSet<string> PerformanceModes =
         new(StringComparer.OrdinalIgnoreCase) { "normal" };
-    private static readonly HashSet<string> ReasoningEfforts =
-        new(StringComparer.OrdinalIgnoreCase) { "medium" };
+    private static readonly HashSet<string> LegacyReasoningEfforts =
+        new(StringComparer.OrdinalIgnoreCase) { "low", "medium", "high" };
+    private static readonly HashSet<string> CurrentReasoningEfforts =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max",
+        };
 
     private readonly IAgentProcessRunner _processRunner;
     private readonly string _executable;
+    private bool _supportsEffortFlag;
 
     public ClaudeCodeCliAdapter(
         IAgentProcessRunner processRunner,
@@ -78,6 +88,35 @@ public sealed class ClaudeCodeCliAdapter : IAgentCliAdapter
                         ? $"Claude --version exited with code {result.ExitCode}."
                         : $"Claude --version exited with code {result.ExitCode}: {detail}");
             }
+
+            var helpOutput = new List<string>();
+            var helpResult = await _processRunner.RunAsync(
+                    new AgentCliLaunchPlan(
+                        executablePath,
+                        ["--help"],
+                        Environment.CurrentDirectory,
+                        BuildEnvironment(
+                            executablePath,
+                            Path.Combine(probeDirectory, "debug.log")),
+                        AgentInputMode.None,
+                        AgentOutputProtocol.Text),
+                    null,
+                    (line, _) =>
+                    {
+                        if (line.Stream == AgentOutputChannel.StandardOutput)
+                        {
+                            helpOutput.Add(line.Text);
+                        }
+
+                        return ValueTask.CompletedTask;
+                    },
+                    cancellationToken)
+                .ConfigureAwait(false);
+            _supportsEffortFlag = helpResult.ExitCode == 0 &&
+                                  helpOutput.Any(
+                                      static line => line.Contains(
+                                          "--effort <level>",
+                                          StringComparison.Ordinal));
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -110,7 +149,9 @@ public sealed class ClaudeCodeCliAdapter : IAgentCliAdapter
             true,
             true,
             PerformanceModes,
-            ReasoningEfforts);
+            _supportsEffortFlag
+                ? CurrentReasoningEfforts
+                : LegacyReasoningEfforts);
     }
 
     public Task MaterializeAsync(
@@ -143,7 +184,10 @@ public sealed class ClaudeCodeCliAdapter : IAgentCliAdapter
                 executablePath,
                 arguments,
                 workspace.WorkingDirectory,
-                BuildEnvironment(executablePath, debugPath),
+                BuildEnvironment(
+                    executablePath,
+                    debugPath,
+                    _supportsEffortFlag ? null : request.Reasoning.Effort),
                 AgentInputMode.StandardInput,
                 AgentOutputProtocol.JsonLines)
             {
@@ -199,7 +243,7 @@ public sealed class ClaudeCodeCliAdapter : IAgentCliAdapter
         }
     }
 
-    private static List<string> BuildArguments(
+    private List<string> BuildArguments(
         AgentRunRequest request,
         AgentWorkspace workspace)
     {
@@ -214,7 +258,7 @@ public sealed class ClaudeCodeCliAdapter : IAgentCliAdapter
             "--setting-sources",
             "project,local",
             "--settings",
-            BuildSafeSettings(request.Workspace.ReadOnlyPaths),
+            BuildSafeSettings(request),
             "--strict-mcp-config",
             "--no-chrome",
         };
@@ -236,6 +280,12 @@ public sealed class ClaudeCodeCliAdapter : IAgentCliAdapter
         }
 
         AddSessionArguments(arguments, request.Session);
+
+        if (_supportsEffortFlag)
+        {
+            arguments.Add("--effort");
+            arguments.Add(request.Reasoning.Effort);
+        }
 
         if (request.OutputSchema is not null)
         {
@@ -307,14 +357,15 @@ public sealed class ClaudeCodeCliAdapter : IAgentCliAdapter
         }
     }
 
-    private static string BuildSafeSettings(IReadOnlyList<string> readOnlyPaths)
+    private static string BuildSafeSettings(AgentRunRequest request)
     {
-        var normalizedPaths = readOnlyPaths
+        var normalizedPaths = request.Workspace.ReadOnlyPaths
             .Select(Path.GetFullPath)
             .Distinct(PathComparer)
             .ToArray();
         var settings = new
         {
+            fastMode = false,
             permissions = new
             {
                 deny = normalizedPaths.Select(ToEditDenyRule).ToArray(),
@@ -353,18 +404,27 @@ public sealed class ClaudeCodeCliAdapter : IAgentCliAdapter
         return $"Edit(/{normalized.TrimEnd('/')}{suffix})";
     }
 
-    private static void ValidateRequestCapabilities(AgentRunRequest request)
+    private void ValidateRequestCapabilities(AgentRunRequest request)
     {
-        if (request.Performance != AgentPerformanceMode.Normal)
+        if (request.Performance == AgentPerformanceMode.Medium)
         {
             throw new InvalidOperationException(
-                "The verified Claude Code baseline only supports normal performance in CreateAgent.");
+                "Claude Code does not provide a distinct medium performance mode.");
         }
 
-        if (!ReasoningEfforts.Contains(request.Reasoning.Effort))
+        if (request.Performance == AgentPerformanceMode.Fast)
         {
             throw new InvalidOperationException(
-                "The verified Claude Code baseline only supports the provider-default medium reasoning level in CreateAgent.");
+                "Claude fast mode is not available in the verified CreateAgent environment because it requires Claude Code 2.1.36 or later, Opus 4.6, and account-level extra usage.");
+        }
+
+        var supportedEfforts = _supportsEffortFlag
+            ? CurrentReasoningEfforts
+            : LegacyReasoningEfforts;
+        if (!supportedEfforts.Contains(request.Reasoning.Effort))
+        {
+            throw new InvalidOperationException(
+                $"Claude reasoning effort '{request.Reasoning.Effort}' is not supported by the detected CLI.");
         }
     }
 
@@ -501,33 +561,36 @@ public sealed class ClaudeCodeCliAdapter : IAgentCliAdapter
             false,
             false,
             PerformanceModes,
-            ReasoningEfforts,
+            LegacyReasoningEfforts,
             diagnostic);
 
     private static Dictionary<string, string> BuildEnvironment(
         string executablePath,
-        string debugLogPath)
+        string debugLogPath,
+        string? reasoningEffort = null)
     {
         var executableDirectory = Path.GetDirectoryName(executablePath);
         var currentPath = Environment.GetEnvironmentVariable("PATH");
-        if (string.IsNullOrWhiteSpace(executableDirectory))
-        {
-            return new Dictionary<string, string>(StringComparer.Ordinal)
-            {
-                ["CLAUDE_CODE_DEBUG_LOGS_DIR"] = debugLogPath,
-            };
-        }
-
-        return new Dictionary<string, string>(StringComparer.Ordinal)
+        var environment = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["CLAUDE_CODE_DEBUG_LOGS_DIR"] = debugLogPath,
-            ["PATH"] = string.IsNullOrWhiteSpace(currentPath)
+        };
+        if (!string.IsNullOrWhiteSpace(executableDirectory))
+        {
+            environment["PATH"] = string.IsNullOrWhiteSpace(currentPath)
                 ? executableDirectory
                 : string.Concat(
                     executableDirectory,
                     Path.PathSeparator,
-                    currentPath),
-        };
+                    currentPath);
+        }
+
+        if (reasoningEffort is not null)
+        {
+            environment["CLAUDE_CODE_EFFORT_LEVEL"] = reasoningEffort;
+        }
+
+        return environment;
     }
 
     private static StringComparer PathComparer =>

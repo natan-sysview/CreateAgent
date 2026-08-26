@@ -103,6 +103,8 @@ dotnet run --project src/CreateAgent.Cli -- run request.json --storage ./runtime
 ```
 
 Sustituye `codex` por `claude` para generar una solicitud para Claude Code.
+Los modelos, esfuerzos y velocidades probados se encuentran en
+[Valores de Claude comprobados](docs/guia_para_agentes_desarrolladores.md#valores-de-claude-comprobados).
 
 ## Compilar y probar
 

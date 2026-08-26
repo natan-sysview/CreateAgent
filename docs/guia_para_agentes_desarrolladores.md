@@ -151,12 +151,38 @@ instalada del CLI.
 
 | Claude Code | `providerName` | `model` | `performance` | `reasoning.effort` | Resultado |
 |---|---|---|---|---|---|
+| `2.1.22` | `claude` | `sonnet` | `normal` | `low` | Comprobado |
 | `2.1.22` | `claude` | `sonnet` | `normal` | `medium` | Comprobado |
+| `2.1.22` | `claude` | `sonnet` | `normal` | `high` | Comprobado |
+| `2.1.246` | `claude` | `claude-opus-4-6` | `normal` | `xhigh` | Comprobado |
+| `2.1.246` | `claude` | `claude-opus-4-6` | `normal` | `max` | Comprobado |
 
 La prueba real creó `hola.py`, devolvió un objeto JSON y confirmó que una ruta
-de `workspace.readOnlyPaths` podía leerse pero no modificarse. En esta versión
-no uses `fast`, `medium` como velocidad ni esfuerzos distintos de `medium`:
-CreateAgent los rechaza porque todavía no están comprobados.
+de `workspace.readOnlyPaths` podía leerse pero no modificarse. Las pruebas de
+esfuerzo devolvieron el texto esperado con código de salida `0`.
+
+Opciones de modelo documentadas por Claude Code:
+
+- alias: `default`, `best`, `sonnet`, `opus`, `haiku`, `sonnet[1m]`,
+  `opus[1m]` y `opusplan`;
+- nombre completo, por ejemplo `claude-opus-4-6`, para fijar una versión.
+
+Los alias pueden cambiar de modelo con una actualización. CreateAgent no
+mantiene una lista cerrada: pasa `model` a Claude y deja que el proveedor
+valide el acceso de la cuenta. Los valores probados por este proyecto son
+`sonnet` y `claude-opus-4-6`.
+
+El probe decide los esfuerzos disponibles según el CLI detectado. En
+`2.1.22` usa `CLAUDE_CODE_EFFORT_LEVEL`; cuando la ayuda incluye `--effort`,
+usa ese argumento y admite `low`, `medium`, `high`, `xhigh` y `max`. El valor
+interactivo `auto` no forma parte del contrato de CreateAgent porque no expresa
+un esfuerzo concreto.
+
+Para velocidad, solo `normal` está habilitado. Claude no posee un modo
+`medium`. El modo `fast` oficial requiere Claude Code `2.1.36` o posterior,
+Opus 4.6 y extra usage habilitado. Se probó con `2.1.246` y Opus 4.6, pero la
+cuenta informó `extra_usage_disabled` y ejecutó con velocidad `standard`;
+CreateAgent lo rechaza para no degradarlo silenciosamente.
 
 Claude recibe los nombres de `tools` tal como se escriben. Por ejemplo,
 `["Read", "Write"]` limita la ejecución a esas herramientas. Si el workspace

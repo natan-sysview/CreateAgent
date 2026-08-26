@@ -76,6 +76,11 @@ Velocidad solicitada:
 Si un proveedor no ofrece el modo solicitado, su adaptador falla con un error
 claro. CreateAgent no cambia la velocidad silenciosamente.
 
+En Claude Code solamente está habilitado `normal`. No existe un modo
+`medium`. Aunque Claude ofrece `fast` bajo ciertas condiciones, la cuenta de
+prueba respondió `extra_usage_disabled` y ejecutó a velocidad `standard`, así
+que CreateAgent lo rechaza hasta poder verificarlo realmente.
+
 ### `reasoning.effort`
 
 Nivel de razonamiento solicitado. Los valores disponibles dependen del
@@ -89,9 +94,9 @@ En el menú de Codex, las etiquetas `Mínimo`, `Medio`, `Alto`, `Muy alta` y
 `Ultra` corresponden respectivamente a `low`, `medium`, `high`, `xhigh` y
 `ultra`.
 
-Con Claude Code `2.1.22`, el único valor comprobado es `medium`, que conserva
-el nivel normal del proveedor. Otros niveles se rechazan hasta comprobarlos en
-una versión compatible.
+Con Claude Code `2.1.22` están comprobados `low`, `medium` y `high`. Si el probe
+detecta una versión con el argumento `--effort`, admite además `xhigh` y `max`;
+ambos fueron comprobados con Claude Code `2.1.246` y `claude-opus-4-6`.
 
 ### `session`
 
