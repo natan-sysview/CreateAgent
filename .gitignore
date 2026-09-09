@@ -35,6 +35,16 @@ temp/
 .env.*
 !.env.example
 appsettings.Development.json
+appsettings.Local.json
+/host.json
+/request.json
+auth.json
+credentials.json
+secrets.json
+*.key
+*.pem
+*.pfx
+*.p12
 
 # IDE y sistema operativo
 .idea/
