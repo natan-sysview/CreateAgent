@@ -4,9 +4,9 @@
 
 - Versión: `0.1.0-alpha.1`.
 - Runtime: .NET 10.
-- Adaptadores productivos: Codex CLI y Claude Code.
+- Adaptadores productivos: Codex CLI, Claude Code y OpenCode con DeepSeek.
 - Baselines inspeccionadas: Codex CLI `0.146.0`; Claude Code `2.1.22` y
-  `2.1.246`.
+  `2.1.246`; OpenCode `1.18.30`.
 - Distribución: paquetes NuGet locales; publicación pública pendiente.
 
 ## Implementado
@@ -37,6 +37,7 @@
 | Diagnóstico de host y probe de proveedor | Implementado |
 | Cancelación por `Ctrl+C` | Implementado |
 | Adaptador Claude Code | Implementado y comprobado con Claude Code `2.1.22` y `2.1.246` |
+| Adaptador OpenCode | Implementado y comprobado con OpenCode `1.18.30` y DeepSeek V4 Flash/Pro |
 | Adaptador Gemini CLI | Pendiente |
 | Herramientas Claude | Allowlist mediante `tools`; MCP mediante `.mcp.json` copiado al workspace |
 | Resolución de perfiles de herramientas Codex | Pendiente |
@@ -79,6 +80,16 @@ claramente, sin degradación silenciosa.
 Las rutas externas de solo lectura se protegen tanto para herramientas de
 edición como para comandos ejecutados dentro del sandbox.
 
+## Política de capacidades en OpenCode v0.1
+
+El adaptador usa `opencode run --pure --format json`, prompt por stdin y
+configuración de permisos aislada por proceso. Soporta DeepSeek V4 Flash y V4
+Pro, eventos estructurados, herramientas y razonamiento visible en debug.
+
+Solo permite `performance: normal` y `session.mode: new`. Rechaza sesiones
+reanudadas, salida con schema, rutas externas de solo lectura y modelos o
+variantes no comprobados. No degrada ni sustituye el modelo solicitado.
+
 ## Validación automatizada
 
 La suite usa un CLI falso compilado como proceso independiente y cubre:
@@ -107,7 +118,10 @@ La suite usa un CLI falso compilado como proceso independiente y cubre:
 - probe seguro de la instalación local mediante `codex --version`;
 - argumentos, eventos, sesiones y seguridad del adaptador Claude Code;
 - ejecución compartida de Claude a través del wrapper;
-- probe seguro mediante `claude --version`.
+- probe seguro mediante `claude --version`;
+- argumentos, eventos, permisos, modelos y variantes del adaptador OpenCode;
+- ejecución compartida y cuarentena ZIP de OpenCode mediante el wrapper;
+- probe seguro mediante `opencode --version`.
 
 Las pruebas específicas del wrapper cubren además:
 
@@ -121,7 +135,7 @@ Las pruebas específicas del wrapper cubren además:
 - escritura atómica sin sobrescritura accidental;
 - rechazo limpio de configuraciones de proveedor incompletas.
 
-La suite actual contiene 49 pruebas: 35 de biblioteca/runtime y 14 del wrapper
+La suite actual contiene 67 pruebas: 49 de biblioteca/runtime y 18 del wrapper
 CLI.
 
 Las pruebas ordinarias nunca invocan una sesión real de IA. Las pruebas
@@ -129,3 +143,8 @@ manuales con Claude Code comprobaron `sonnet` y esfuerzos `low`, `medium` y
 `high` en `2.1.22`; `claude-opus-4-6` con `xhigh` y `max` en `2.1.246`; la
 creación de un archivo; JSON estructurado; y la protección de una referencia
 externa de solo lectura.
+
+Las pruebas con OpenCode `1.18.30` comprobaron DeepSeek V4 Flash con `low`,
+`high` y `max`; DeepSeek V4 Pro con `high` y `max`; creación de archivos,
+captura de razonamiento y salida final. También confirmaron que sus sesiones
+están ligadas al directorio del proyecto.

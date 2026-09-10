@@ -7,7 +7,8 @@
 - Implementación: `0.1.0-alpha.1` funcional; evolución en curso.
 - Lenguaje objetivo: C# sobre .NET 10 LTS.
 - Consumidores soportados en v1: aplicaciones C#/.NET.
-- Proveedores iniciales previstos: Codex CLI, Claude Code y Gemini CLI.
+- Proveedores implementados: Codex CLI, Claude Code y OpenCode.
+- Proveedor previsto: Gemini CLI.
 - Propósito: definir una pieza reusable para crear, ejecutar, observar y auditar
   workers basados en agentes CLI sin acoplar el núcleo a un proveedor.
 
@@ -70,7 +71,8 @@ La pieza administra el ciclo de vida del agente. No redacta automáticamente el
 contenido funcional de las skills, instrucciones o especificaciones.
 
 El núcleo será neutral. Las características particulares de Codex CLI, Claude
-Code, Gemini CLI o cualquier proveedor futuro vivirán en adaptadores separados.
+Code, OpenCode, Gemini CLI o cualquier proveedor futuro vivirán en adaptadores
+separados.
 
 ## 2. Definición del producto
 
@@ -291,6 +293,7 @@ Adaptadores iniciales previstos:
 ```text
 CodexCliAdapter
 ClaudeCodeCliAdapter
+OpenCodeCliAdapter
 GeminiCliAdapter
 ```
 
@@ -310,7 +313,8 @@ Identificadores iniciales sugeridos:
 
 ```text
 openai.codex
-anthropic.claude-code
+anthropic.claude
+anomaly.opencode
 google.gemini-cli
 ```
 
@@ -945,6 +949,7 @@ CreateAgent.Runtime.Processes
 CreateAgent.Storage.FileSystem
 CreateAgent.Providers.Codex
 CreateAgent.Providers.ClaudeCode
+CreateAgent.Providers.OpenCode
 CreateAgent.Providers.GeminiCli
 CreateAgent.AspNetCore
 CreateAgent.Cli
@@ -984,6 +989,7 @@ Antes de declarar una primera versión:
 - pruebas de contrato ejecutadas contra todos los adaptadores;
 - prueba de compatibilidad con una versión real aprobada de Codex CLI;
 - prueba de compatibilidad con una versión real aprobada de Claude Code;
+- prueba de compatibilidad con una versión real aprobada de OpenCode;
 - prueba de compatibilidad con una versión real aprobada de Gemini CLI;
 - prueba end-to-end con un workspace desechable.
 
@@ -1016,7 +1022,8 @@ La versión inicial se considerará funcional cuando:
    distribuida mediante NuGet.
 2. El núcleo será neutral respecto del agente CLI.
 3. Cada agente CLI tendrá un adaptador independiente.
-4. Codex CLI, Claude Code y Gemini CLI son los primeros proveedores previstos.
+4. Codex CLI, Claude Code y OpenCode están implementados; Gemini CLI permanece
+   previsto.
 5. La biblioteca podrá utilizarse desde un backend web y desde otros productos.
 6. El runtime común administrará procesos, concurrencia, workspaces, streaming,
    auditoría, cancelación y cuarentena.

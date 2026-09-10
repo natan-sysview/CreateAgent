@@ -29,6 +29,13 @@ public static class Program
             return await RunClaudeAsync(args).ConfigureAwait(false);
         }
 
+        if (args.Length > 0 &&
+            string.Equals(args[0], "run", StringComparison.Ordinal) &&
+            string.Equals(GetOption(args, "--format"), "json", StringComparison.Ordinal))
+        {
+            return await RunOpenCodeAsync().ConfigureAwait(false);
+        }
+
         var mode = GetOption(args, "--mode") ?? "success";
         var delayMilliseconds = int.TryParse(
             GetOption(args, "--delay-ms"),
@@ -211,6 +218,65 @@ public static class Program
                 });
         }
 
+        return 0;
+    }
+
+    private static async Task<int> RunOpenCodeAsync()
+    {
+        var prompt = await Console.In.ReadToEndAsync().ConfigureAwait(false);
+        WriteEvent(
+            new
+            {
+                type = "step_start",
+                sessionID = "fake-opencode-session-001",
+                part = new { type = "step-start" },
+            });
+        if (prompt.Contains("FAIL_OPENCODE", StringComparison.Ordinal))
+        {
+            WriteEvent(
+                new
+                {
+                    type = "error",
+                    sessionID = "fake-opencode-session-001",
+                    message = "fake OpenCode failure",
+                });
+            return 17;
+        }
+
+        WriteEvent(
+            new
+            {
+                type = "tool_use",
+                sessionID = "fake-opencode-session-001",
+                part = new
+                {
+                    type = "tool",
+                    tool = "read",
+                    state = new { status = "completed" },
+                },
+            });
+        WriteEvent(
+            new
+            {
+                type = "text",
+                sessionID = "fake-opencode-session-001",
+                part = new
+                {
+                    type = "text",
+                    text = $"fake opencode completed: {prompt.Trim()}",
+                },
+            });
+        WriteEvent(
+            new
+            {
+                type = "step_finish",
+                sessionID = "fake-opencode-session-001",
+                part = new
+                {
+                    type = "step-finish",
+                    reason = "stop",
+                },
+            });
         return 0;
     }
 

@@ -49,6 +49,28 @@ public sealed class CliApplicationTests
     }
 
     [Fact]
+    public async Task RequestInitSupportsOpenCodeDeepSeekFlash()
+    {
+        var initialized = await RunAsync(
+            ["request", "init", "--provider", "opencode", "--output", "-"]);
+
+        Assert.Equal((int)CliExitCode.Success, initialized.ExitCode);
+        using var request = JsonDocument.Parse(initialized.StandardOutput);
+        Assert.Equal(
+            "opencode",
+            request.RootElement.GetProperty("providerName").GetString());
+        Assert.Equal(
+            "deepseek/deepseek-v4-flash",
+            request.RootElement.GetProperty("model").GetString());
+        Assert.Equal(
+            "high",
+            request.RootElement
+                .GetProperty("reasoning")
+                .GetProperty("effort")
+                .GetString());
+    }
+
+    [Fact]
     public async Task RelativeWorkspacePathIsResolvedFromRequestFile()
     {
         using var temporary = new TemporaryDirectory();
@@ -163,6 +185,30 @@ public sealed class CliApplicationTests
     }
 
     [Fact]
+    public async Task ProbeUsesConfiguredOpenCodeExecutable()
+    {
+        var result = await RunAsync(
+            [
+                "provider",
+                "probe",
+                "opencode",
+                "--opencode-path",
+                FakeCliPath(),
+                "--output",
+                "jsonl",
+            ]);
+
+        Assert.Equal((int)CliExitCode.Success, result.ExitCode);
+        using var capabilities = JsonDocument.Parse(result.StandardOutput.Trim());
+        Assert.Equal(
+            "anomaly.opencode",
+            capabilities.RootElement
+                .GetProperty("data")
+                .GetProperty("providerId")
+                .GetString());
+    }
+
+    [Fact]
     public async Task RunStreamsJsonLinesAndCanBeInspected()
     {
         using var temporary = new TemporaryDirectory();
@@ -246,7 +292,86 @@ public sealed class CliApplicationTests
     }
 
     [Fact]
-    public async Task HostTemplateIncludesBothProviderExecutables()
+    public async Task RunExecutesOpenCodeThroughTheSharedContract()
+    {
+        using var temporary = new TemporaryDirectory();
+        var requestPath = Path.Combine(temporary.Path, "opencode-request.json");
+        var storage = Path.Combine(temporary.Path, "storage");
+        await File.WriteAllTextAsync(
+            requestPath,
+            CreateAgentJson.SerializeRequest(
+                CreateRequest() with
+                {
+                    ProviderName = "opencode",
+                    Model = "deepseek/deepseek-v4-flash",
+                    Reasoning = new AgentReasoningOptions { Effort = "high" },
+                }));
+
+        var run = await RunAsync(
+            [
+                "run",
+                requestPath,
+                "--opencode-path",
+                FakeCliPath(),
+                "--storage",
+                storage,
+                "--output",
+                "jsonl",
+            ]);
+
+        Assert.Equal((int)CliExitCode.Success, run.ExitCode);
+        Assert.Contains(
+            "fake opencode completed",
+            run.StandardOutput,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task FailedOpenCodeRunCreatesQuarantineArchive()
+    {
+        using var temporary = new TemporaryDirectory();
+        var requestPath = Path.Combine(temporary.Path, "opencode-failure.json");
+        var storage = Path.Combine(temporary.Path, "storage");
+        await File.WriteAllTextAsync(
+            requestPath,
+            CreateAgentJson.SerializeRequest(
+                CreateRequest() with
+                {
+                    ProviderName = "opencode",
+                    Model = "deepseek/deepseek-v4-flash",
+                    Reasoning = new AgentReasoningOptions { Effort = "high" },
+                    Prompt = "FAIL_OPENCODE",
+                }));
+
+        var run = await RunAsync(
+            [
+                "run",
+                requestPath,
+                "--opencode-path",
+                FakeCliPath(),
+                "--storage",
+                storage,
+                "--output",
+                "jsonl",
+            ]);
+
+        Assert.Equal((int)CliExitCode.RunFailed, run.ExitCode);
+        var resultLine = Assert.Single(
+            run.StandardOutput.Split(
+                '\n',
+                StringSplitOptions.RemoveEmptyEntries |
+                StringSplitOptions.TrimEntries),
+            IsResultLine);
+        using var result = JsonDocument.Parse(resultLine);
+        var data = result.RootElement.GetProperty("data");
+        Assert.Equal("failed", data.GetProperty("state").GetString());
+        var artifact = Assert.Single(data.GetProperty("artifacts").EnumerateArray());
+        Assert.Equal("failure-workspace", artifact.GetProperty("name").GetString());
+        Assert.True(File.Exists(artifact.GetProperty("path").GetString()));
+    }
+
+    [Fact]
+    public async Task HostTemplateIncludesAllProviderExecutables()
     {
         var result = await RunAsync(["host", "init", "--output", "-"]);
 
@@ -259,6 +384,9 @@ public sealed class CliApplicationTests
         Assert.Equal(
             "claude",
             providers.GetProperty("claude").GetProperty("executable").GetString());
+        Assert.Equal(
+            "opencode",
+            providers.GetProperty("openCode").GetProperty("executable").GetString());
     }
 
     [Fact]

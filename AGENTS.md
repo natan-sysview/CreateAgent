@@ -9,9 +9,9 @@ o modificar la biblioteca, lee:
 2. `docs/guia_para_agentes_desarrolladores.md`;
 3. `docs/contrato_json_ejecucion_agente.md`.
 
-Para elegir modelo y razonamiento de Codex, consulta primero la sección
-«Valores de Codex comprobados» de la guía. No supongas que un modelo funciona
-solamente porque su nombre es conocido por otro cliente de Codex.
+Para elegir modelo y razonamiento de Codex, Claude u OpenCode, consulta primero
+las tablas de valores comprobados de la guía. No supongas que una combinación
+funciona solamente porque aparece en otro cliente.
 
 ## Reglas del contrato
 
@@ -21,7 +21,7 @@ solamente porque su nombre es conocido por otro cliente de Codex.
 - No agregues configuración del host a `AgentRunRequest`.
 - No agregues propiedades públicas, abstracciones ni archivos sin una
   necesidad solicitada y comprobable.
-- Las diferencias de Codex, Claude o Gemini pertenecen a su adaptador.
+- Las diferencias de Codex, Claude, OpenCode o Gemini pertenecen a su adaptador.
 - Skills, SDD, documentación y datos son preparados por el consumidor. Se
   copian mediante `workspace.sources` o se referencian sin escritura mediante
   `workspace.readOnlyPaths`.

@@ -57,13 +57,15 @@ Nombre humano de la ejecución. También se usa para crear un directorio legible
 
 ### `providerName`
 
-Adaptador solicitado. Los valores implementados son `codex` y `claude`; también
-se aceptan los identificadores completos `openai.codex` y
-`anthropic.claude`.
+Adaptador solicitado. Los valores implementados son `codex`, `claude` y
+`opencode`; también se aceptan `openai.codex`, `anthropic.claude` y
+`anomaly.opencode`.
 
 ### `model`
 
 Modelo solicitado. Si se omite, el proveedor selecciona su modelo normal.
+OpenCode requiere elegir `deepseek/deepseek-v4-flash` o
+`deepseek/deepseek-v4-pro`.
 
 ### `performance`
 
@@ -81,6 +83,9 @@ En Claude Code solamente está habilitado `normal`. No existe un modo
 prueba respondió `extra_usage_disabled` y ejecutó a velocidad `standard`, así
 que CreateAgent lo rechaza hasta poder verificarlo realmente.
 
+OpenCode admite solamente `normal`. Para elegir velocidad o capacidad usa de
+forma explícita el modelo DeepSeek Flash o Pro; el adaptador nunca los cambia.
+
 ### `reasoning.effort`
 
 Nivel de razonamiento solicitado. Los valores disponibles dependen del
@@ -93,6 +98,8 @@ Las combinaciones ejecutadas con éxito están registradas en
 En el menú de Codex, las etiquetas `Mínimo`, `Medio`, `Alto`, `Muy alta` y
 `Ultra` corresponden respectivamente a `low`, `medium`, `high`, `xhigh` y
 `ultra`.
+
+En OpenCode, Flash acepta `low`, `high` y `max`; Pro acepta `high` y `max`.
 
 Con Claude Code `2.1.22` están comprobados `low`, `medium` y `high`. Si el probe
 detecta una versión con el argumento `--effort`, admite además `xhigh` y `max`;
@@ -118,6 +125,9 @@ Para reanudar una sesión:
 `id` solamente es válido con `resume`. Otros modos disponibles en el contrato
 son `continue-latest`, `fork` y `ephemeral`; cada adaptador declara cuáles
 puede ejecutar.
+
+OpenCode admite únicamente `new`: sus sesiones están asociadas al directorio
+del proyecto y cada corrida de CreateAgent usa un workspace nuevo.
 
 ### `prompt`
 
@@ -186,6 +196,9 @@ disponible en `AgentRunResult.StructuredOutput` y se registra en
 Claude recibe el mismo esquema directamente mediante `--json-schema`; tampoco
 crea un archivo de resultado adicional.
 
+OpenCode `1.18.30` no ofrece una opción nativa de schema verificada, por lo que
+su adaptador rechaza `outputSchema`.
+
 `--json` y `outputSchema` resuelven necesidades distintas: el primero produce
 eventos JSONL en tiempo real; el segundo controla el objeto final.
 
@@ -247,6 +260,8 @@ solo lectura:
   posterior).
 - En Claude se combina `--add-dir` con reglas que deniegan edición y escritura
   desde el sandbox. `--add-dir` por sí solo no representa solo lectura.
+- OpenCode `1.18.30` no puede garantizar solo lectura frente a comandos de
+  shell; su adaptador rechaza `readOnlyPaths`.
 
 ## 6. Herramientas
 
@@ -269,6 +284,10 @@ configuración MCP estricta para no cargar servidores ajenos al workspace.
 
 Codex v0.1 todavía rechaza listas no vacías hasta que exista su resolvedor de
 herramientas.
+
+En OpenCode, una lista vacía conserva las herramientas normales. Una lista con
+valores se convierte en allowlist; `question` y `external_directory` permanecen
+denegadas por seguridad.
 
 ## 7. Valores internos
 

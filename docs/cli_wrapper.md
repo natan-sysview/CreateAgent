@@ -30,6 +30,7 @@ Solicitud mínima:
 | `host init` | Crear la configuración local del CLI |
 | `provider probe codex` | Comprobar que Codex está disponible |
 | `provider probe claude` | Comprobar que Claude Code está disponible |
+| `provider probe opencode` | Comprobar que OpenCode está disponible |
 | `doctor` | Validar host y proveedor |
 | `schema print` | Imprimir el JSON Schema de la solicitud |
 | `run` | Ejecutar el worker y publicar eventos |
@@ -42,8 +43,8 @@ modelo, velocidad, razonamiento, sesión, prompt, workspace, herramientas,
 timeout y debug.
 
 `host.json` contiene la configuración de esta instalación: almacenamiento,
-concurrencia, canales y rutas de los ejecutables Codex y Claude. Estas opciones
-no aparecen en `input.json`.
+concurrencia, canales y rutas de los ejecutables Codex, Claude y OpenCode.
+Estas opciones no aparecen en `input.json`.
 
 Ejemplo de `host.json`:
 
@@ -60,6 +61,9 @@ Ejemplo de `host.json`:
     },
     "claude": {
       "executable": "claude"
+    },
+    "openCode": {
+      "executable": "opencode"
     }
   }
 }

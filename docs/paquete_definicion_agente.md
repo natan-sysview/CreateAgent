@@ -11,7 +11,7 @@
 
 CreateAgent no crea, transforma ni interpreta skills, SDD, constituciones o
 archivos Markdown. La aplicación consumidora prepara una estructura compatible
-con Codex, Claude o Gemini y después pide a CreateAgent que la copie.
+con Codex, Claude, OpenCode o Gemini y después pide a CreateAgent que la copie.
 
 No existe un argumento `agentDefinition` ni un manifiesto obligatorio de la
 biblioteca.

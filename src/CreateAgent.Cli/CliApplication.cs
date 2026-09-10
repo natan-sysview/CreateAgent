@@ -4,6 +4,7 @@ using System.Text.Json;
 using CreateAgent.Core;
 using CreateAgent.Providers.ClaudeCode;
 using CreateAgent.Providers.Codex;
+using CreateAgent.Providers.OpenCode;
 using CreateAgent.Runtime.Processes;
 
 namespace CreateAgent.Cli;
@@ -17,6 +18,7 @@ public static class CliApplication
             "--storage",
             "--codex-path",
             "--claude-path",
+            "--opencode-path",
             "--max-concurrent",
             "--event-capacity",
             "--process-output-capacity",
@@ -186,7 +188,8 @@ public static class CliApplication
         await using var manager = CreateAgentRuntime.CreateDefault(
             host.ToCreateAgentOptions(),
             host.CodexExecutable,
-            host.ClaudeExecutable);
+            host.ClaudeExecutable,
+            host.OpenCodeExecutable);
         var handle = await manager.StartAsync(request, cancellationToken)
             .ConfigureAwait(false);
         using var cancellationRegistration = cancellationToken.Register(
@@ -247,7 +250,7 @@ public static class CliApplication
         if (parsed.HasFlag("--help"))
         {
             throw new CliUsageException(
-                "Usage: createagent request init --provider <codex|claude> [--output request.json] [--force]");
+                "Usage: createagent request init --provider <codex|claude|opencode> [--output request.json] [--force]");
         }
 
         RequirePositionals(parsed, 0, "request init");
@@ -353,7 +356,7 @@ public static class CliApplication
         RequirePositionals(
             parsed,
             2,
-            "provider probe <codex|openai.codex|claude|anthropic.claude>");
+            "provider probe <codex|openai.codex|claude|anthropic.claude|opencode|anomaly.opencode>");
         if (parsed.Positionals[0] != "probe")
         {
             throw new CliUsageException(
@@ -399,6 +402,8 @@ public static class CliApplication
                 new CodexCliAdapter(runner, host.CodexExecutable)
                     .ProbeAsync(cancellationToken),
                 new ClaudeCodeCliAdapter(runner, host.ClaudeExecutable)
+                    .ProbeAsync(cancellationToken),
+                new OpenCodeCliAdapter(runner, host.OpenCodeExecutable)
                     .ProbeAsync(cancellationToken))
             .ConfigureAwait(false);
         var ready = capabilities.All(static capability => capability.IsAvailable);
@@ -506,6 +511,8 @@ public static class CliApplication
                 new CodexCliAdapter(runner, host.CodexExecutable),
             "claude" or "anthropic.claude" =>
                 new ClaudeCodeCliAdapter(runner, host.ClaudeExecutable),
+            "opencode" or "anomaly.opencode" =>
+                new OpenCodeCliAdapter(runner, host.OpenCodeExecutable),
             _ => throw new CliUsageException(
                 $"Provider '{provider}' is not supported by this CLI version."),
         };
@@ -560,10 +567,10 @@ public static class CliApplication
         CreateAgent CLI - reference host for CreateAgent
 
         Usage:
-          createagent request init --provider <codex|claude> [--output request.json] [--force]
+          createagent request init --provider <codex|claude|opencode> [--output request.json] [--force]
           createagent request validate <request.json> [--output human|jsonl]
           createagent host init [--output host.json] [--force]
-          createagent provider probe <codex|openai.codex|claude|anthropic.claude> [host options]
+          createagent provider probe <codex|openai.codex|claude|anthropic.claude|opencode|anomaly.opencode> [host options]
           createagent doctor [host options]
           createagent schema print
           createagent run <request.json> [host options] [--output human|jsonl]
@@ -575,6 +582,7 @@ public static class CliApplication
           --storage <directory>
           --codex-path <executable>
           --claude-path <executable>
+          --opencode-path <executable>
           --max-concurrent <number>
           --event-capacity <number>
           --process-output-capacity <number>

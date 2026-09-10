@@ -6,6 +6,7 @@
 2. [Integración recomendada](#2-integración-recomendada)
    - [Valores de Codex comprobados](#valores-de-codex-comprobados)
    - [Valores de Claude comprobados](#valores-de-claude-comprobados)
+   - [Valores de OpenCode comprobados](#valores-de-opencode-comprobados)
 3. [Patrones y responsabilidades](#3-patrones-y-responsabilidades)
 4. [Manejo de errores](#4-manejo-de-errores)
 5. [Auditoría y diagnóstico](#5-auditoría-y-diagnóstico)
@@ -187,6 +188,34 @@ CreateAgent lo rechaza para no degradarlo silenciosamente.
 Claude recibe los nombres de `tools` tal como se escriben. Por ejemplo,
 `["Read", "Write"]` limita la ejecución a esas herramientas. Si el workspace
 contiene `.mcp.json`, el adaptador usa exclusivamente esa configuración MCP.
+
+### Valores de OpenCode comprobados
+
+Baseline: OpenCode `1.18.30`, con DeepSeek autenticado.
+
+| `providerName` | `model` | `performance` | `reasoning.effort` | Resultado |
+|---|---|---|---|---|
+| `opencode` | `deepseek/deepseek-v4-flash` | `normal` | `low` | Comprobado |
+| `opencode` | `deepseek/deepseek-v4-flash` | `normal` | `high` | Comprobado |
+| `opencode` | `deepseek/deepseek-v4-flash` | `normal` | `max` | Comprobado |
+| `opencode` | `deepseek/deepseek-v4-pro` | `normal` | `high` | Comprobado |
+| `opencode` | `deepseek/deepseek-v4-pro` | `normal` | `max` | Comprobado |
+
+También se acepta `providerName: "anomaly.opencode"`. El adaptador ejecuta
+`opencode run --format json`, manda el prompt por stdin y normaliza texto,
+razonamiento, herramientas y progreso. `debug: true` habilita los eventos de
+razonamiento mediante `--thinking`.
+
+Límites intencionales de esta primera versión:
+
+- solo los dos modelos de la tabla y `performance: normal`;
+- solo `session.mode: new`, porque OpenCode asocia las sesiones al directorio
+  del proyecto y CreateAgent crea un workspace nuevo por corrida;
+- no admite todavía `outputSchema` ni `workspace.readOnlyPaths`;
+- `tools` actúa como allowlist; `question` y `external_directory` siempre se
+  deniegan para conservar una ejecución no interactiva y aislada.
+
+No cambies silenciosamente entre Pro y Flash para simular velocidad.
 
 ## 3. Patrones y responsabilidades
 

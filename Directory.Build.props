@@ -16,7 +16,7 @@
     <RepositoryType>git</RepositoryType>
     <Authors>CreateAgent contributors</Authors>
     <Description>Cross-platform .NET runtime for isolated, observable and auditable AI CLI agent workers.</Description>
-    <PackageTags>agents;ai;codex;claude;cli;orchestration;workers</PackageTags>
+    <PackageTags>agents;ai;codex;claude;opencode;deepseek;cli;orchestration;workers</PackageTags>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageOutputPath>$(MSBuildThisFileDirectory)artifacts/packages</PackageOutputPath>

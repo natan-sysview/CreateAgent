@@ -7,6 +7,7 @@
     <ProjectReference Include="..\CreateAgent.Storage.FileSystem\CreateAgent.Storage.FileSystem.csproj" />
     <ProjectReference Include="..\CreateAgent.Providers.ClaudeCode\CreateAgent.Providers.ClaudeCode.csproj" />
     <ProjectReference Include="..\CreateAgent.Providers.Codex\CreateAgent.Providers.Codex.csproj" />
+    <ProjectReference Include="..\CreateAgent.Providers.OpenCode\CreateAgent.Providers.OpenCode.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

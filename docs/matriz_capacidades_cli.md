@@ -5,6 +5,7 @@
 Fecha de inspección: 2026-07-28.
 Actualización de Codex CLI: 2026-08-04.
 Validación del adaptador Claude Code: 2026-08-26.
+Validación del adaptador OpenCode: 2026-09-09.
 
 Versiones encontradas en la máquina y baseline temporal de prueba:
 
@@ -12,6 +13,7 @@ Versiones encontradas en la máquina y baseline temporal de prueba:
 Codex CLI    0.146.0
 Claude Code  2.1.22
 Claude Code  2.1.246 (instalación temporal, no sustituyó al CLI global)
+OpenCode     1.18.30
 Gemini CLI   0.40.0
 ```
 
@@ -21,28 +23,28 @@ confirmarse con `ProbeAsync` antes de cada ejecución.
 
 ## 1. Matriz común
 
-| Capacidad | Codex CLI | Claude Code | Gemini CLI |
-|---|---|---|---|
-| Ejecución no interactiva | `codex exec` | `claude -p` | `gemini -p` |
-| Streaming estructurado | `--json` JSONL | `--output-format stream-json` | `--output-format stream-json` |
-| Modelo | `--model` | `--model` | `--model` |
-| Sesión nueva | Sí | Sí | Sí |
-| Reanudar por ID | `exec resume`/`resume` | `--resume` | `--resume` |
-| Continuar última | `--last` | `--continue` | `--resume latest` |
-| Fork de sesión | `fork` interactivo | `--fork-session` | No demostrado en la ayuda instalada |
-| ID elegido por consumidor | No como contrato general | `--session-id UUID` | No demostrado en la ayuda instalada |
-| Nivel de razonamiento | Configuración, dependiente del modelo | `--effort`, dependiente de versión/modelo | No hay flag neutral demostrado |
-| Velocidad | `service_tier=fast` cuando esté disponible | Fast mode condicionado por versión/modelo/cuenta | Selección Auto/Pro/Flash y routing |
-| MCP | `codex mcp` y configuración | `--mcp-config`, `.mcp.json`, `claude mcp` | `gemini mcp`, settings y allowlist |
-| Skills | Agent Skills | Agent Skills | Agent Skills |
-| Instrucciones | `AGENTS.md` | `CLAUDE.md` | `GEMINI.md` |
-| Herramientas allow/deny | approvals, sandbox y config | `--tools`, allow y deny | Policy Engine y approval mode |
-| Sandbox | `--sandbox` | settings/permission modes | `--sandbox` |
-| Aprobaciones | `--ask-for-approval` | `--permission-mode` | `--approval-mode` |
-| Directorios adicionales | `--add-dir` | `--add-dir` | `--include-directories` |
-| Schema de salida | `--output-schema` | `--json-schema` | No demostrado en la ayuda instalada |
-| Límite de presupuesto | No demostrado en ayuda | `--max-budget-usd` | No demostrado en ayuda |
-| Workspace Git aislado | Administrado externamente | Funciones/worktrees según versión | `--worktree` |
+| Capacidad | Codex CLI | Claude Code | OpenCode | Gemini CLI |
+|---|---|---|---|---|
+| Ejecución no interactiva | `codex exec` | `claude -p` | `opencode run` | `gemini -p` |
+| Streaming estructurado | `--json` JSONL | `--output-format stream-json` | `--format json` JSONL | `--output-format stream-json` |
+| Modelo | `--model` | `--model` | `--model provider/model` | `--model` |
+| Sesión nueva | Sí | Sí | Sí | Sí |
+| Reanudar por ID | `exec resume`/`resume` | `--resume` | `--session`, ligado al proyecto | `--resume` |
+| Continuar última | `--last` | `--continue` | `--continue`, ligado al proyecto | `--resume latest` |
+| Fork de sesión | `fork` interactivo | `--fork-session` | `--fork`, ligado al proyecto | No demostrado en la ayuda instalada |
+| ID elegido por consumidor | No como contrato general | `--session-id UUID` | No | No demostrado en la ayuda instalada |
+| Nivel de razonamiento | Configuración, dependiente del modelo | `--effort`, dependiente de versión/modelo | `--variant` | No hay flag neutral demostrado |
+| Velocidad | `service_tier=fast` cuando esté disponible | Fast mode condicionado por versión/modelo/cuenta | Elección explícita Flash/Pro | Selección Auto/Pro/Flash y routing |
+| MCP | `codex mcp` y configuración | `--mcp-config`, `.mcp.json`, `claude mcp` | Configuración OpenCode | `gemini mcp`, settings y allowlist |
+| Skills | Agent Skills | Agent Skills | Agent Skills | Agent Skills |
+| Instrucciones | `AGENTS.md` | `CLAUDE.md` | `AGENTS.md` | `GEMINI.md` |
+| Herramientas allow/deny | approvals, sandbox y config | `--tools`, allow y deny | `permission` en config | Policy Engine y approval mode |
+| Sandbox | `--sandbox` | settings/permission modes | Permisos por herramienta | `--sandbox` |
+| Aprobaciones | `--ask-for-approval` | `--permission-mode` | `permission` | `--approval-mode` |
+| Directorios adicionales | `--add-dir` | `--add-dir` | `--dir` y permiso externo | `--include-directories` |
+| Schema de salida | `--output-schema` | `--json-schema` | No demostrado | No demostrado en la ayuda instalada |
+| Límite de presupuesto | No demostrado en ayuda | `--max-budget-usd` | No demostrado | No demostrado en ayuda |
+| Workspace Git aislado | Administrado externamente | Funciones/worktrees según versión | Administrado externamente | `--worktree` |
 
 ## 2. Codex CLI
 
@@ -149,7 +151,28 @@ En Claude, CreateAgent anuncia `performance: normal`; no existe una velocidad
 `medium` independiente. Fast permanece deshabilitado hasta que una cuenta de
 prueba confirme velocidad efectiva `fast`.
 
-## 4. Gemini CLI
+## 4. OpenCode
+
+Baseline local: `1.18.30`, con DeepSeek autenticado.
+
+El adaptador de CreateAgent usa `opencode run --pure --format json`, envía el
+prompt por stdin y aplica permisos con `OPENCODE_CONFIG_CONTENT`. Se comprobaron
+los eventos `step_start`, `reasoning`, `tool_use`, `text` y `step_finish`.
+
+Combinaciones ejecutadas con código de salida `0`:
+
+| Modelo | Variantes comprobadas |
+|---|---|
+| `deepseek/deepseek-v4-flash` | `low`, `high`, `max` |
+| `deepseek/deepseek-v4-pro` | `high`, `max` |
+
+CreateAgent admite solamente esas combinaciones, `performance: normal` y
+sesiones nuevas. Aunque el CLI publica `--session`, `--continue` y `--fork`,
+las sesiones están ligadas al directorio del proyecto; no atraviesan los
+workspaces nuevos que crea la biblioteca. Tampoco se anuncian todavía schema
+de salida ni rutas externas de solo lectura.
+
+## 5. Gemini CLI
 
 Baseline local: `0.40.0`.
 
@@ -185,9 +208,9 @@ principalmente mediante:
 El adaptador no debe cambiar de Pro a Flash para cumplir `fast` salvo que
 `allowModelSubstitution` sea verdadero.
 
-## 5. Skills
+## 6. Skills
 
-Los tres proveedores se basan en el estándar abierto Agent Skills:
+Los cuatro proveedores se basan en el estándar abierto Agent Skills:
 
 ```text
 <skill>/
@@ -202,6 +225,7 @@ Rutas:
 ```text
 Codex       .agents/skills/<skill>/
 Claude      .claude/skills/<skill>/
+OpenCode    .opencode/skills/<skill>/, .claude/skills/<skill>/ o .agents/skills/<skill>/
 Gemini      .gemini/skills/<skill>/ o .agents/skills/<skill>/
 ```
 
@@ -210,11 +234,12 @@ adaptador únicamente la ubicación.
 
 Las extensiones propietarias del frontmatter no son necesariamente portables.
 
-## 6. Instrucciones y Markdown
+## 7. Instrucciones y Markdown
 
 ```text
 Codex       AGENTS.md
 Claude      CLAUDE.md o .claude/CLAUDE.md
+OpenCode    AGENTS.md
 Gemini      GEMINI.md
 ```
 
@@ -225,7 +250,7 @@ suponer una sintaxis de import no documentada.
 Un paquete neutral debe mantener los Markdown originales y generar un
 entrypoint estructural por proveedor.
 
-## 7. Spec-driven development
+## 8. Spec-driven development
 
 No se identificó un estándar SDD común y nativo.
 
@@ -246,7 +271,7 @@ specs/acceptance.md
 El usuario suministra el contenido y el adaptador hace visible el índice al
 agente.
 
-## 8. Capacidades adicionales que debe contemplar el contrato
+## 9. Capacidades adicionales que debe contemplar el contrato
 
 Además de modelo, velocidad, sesión, inteligencia, prompt y herramientas:
 
@@ -275,7 +300,7 @@ Además de modelo, velocidad, sesión, inteligencia, prompt y herramientas:
 - política ante capacidades no soportadas;
 - retención y cuarentena.
 
-## 9. Fuentes oficiales
+## 10. Fuentes oficiales
 
 - [Codex CLI developer commands](https://developers.openai.com/codex/cli/reference/)
 - [Codex configuration reference](https://developers.openai.com/codex/config-reference/)
@@ -289,6 +314,12 @@ Además de modelo, velocidad, sesión, inteligencia, prompt y herramientas:
 - [Claude Code skills](https://code.claude.com/docs/en/slash-commands)
 - [Claude Code MCP](https://code.claude.com/docs/en/mcp)
 - [Claude Code fast mode](https://code.claude.com/docs/en/fast-mode)
+- [OpenCode CLI](https://opencode.ai/docs/cli/)
+- [OpenCode configuration](https://opencode.ai/docs/config/)
+- [OpenCode permissions](https://opencode.ai/docs/permissions/)
+- [OpenCode skills](https://opencode.ai/docs/skills/)
+- [OpenCode rules](https://opencode.ai/docs/rules/)
+- [OpenCode providers](https://opencode.ai/docs/providers/)
 - [Gemini CLI reference](https://geminicli.com/docs/cli/cli-reference/)
 - [Gemini headless mode](https://geminicli.com/docs/cli/headless/)
 - [Gemini GEMINI.md](https://geminicli.com/docs/cli/gemini-md/)

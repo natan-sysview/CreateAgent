@@ -3,8 +3,8 @@
 CreateAgent es una biblioteca C# para crear y controlar agentes de IA desde
 una aplicación, un backend o un CLI.
 
-Actualmente incluye adaptadores para **Codex CLI** y **Claude Code**. La
-arquitectura permite agregar otros motores, como Gemini CLI.
+Actualmente incluye adaptadores para **Codex CLI**, **Claude Code** y
+**OpenCode con DeepSeek**. La arquitectura permite agregar otros motores.
 
 ## ¿Qué hace?
 
@@ -20,7 +20,8 @@ arquitectura permite agregar otros motores, como Gemini CLI.
 ## Requisitos
 
 - .NET 10 SDK.
-- Codex CLI o Claude Code instalado y autenticado.
+- Al menos uno de estos CLI instalado y autenticado: Codex, Claude Code u
+  OpenCode.
 
 ## Uso básico desde C#
 
@@ -66,6 +67,9 @@ fin, qué workspace utilizó y si produjo errores o archivos de auditoría.
 Para usar Claude Code cambia `ProviderName` a `"claude"`. También se acepta
 el identificador completo `"anthropic.claude"`.
 
+Para OpenCode usa `ProviderName = "opencode"` y elige explícitamente
+`deepseek/deepseek-v4-flash` o `deepseek/deepseek-v4-pro`.
+
 ## Archivos para el agente
 
 Para copiar archivos al workspace:
@@ -102,9 +106,9 @@ dotnet run --project src/CreateAgent.Cli -- request init --provider codex --outp
 dotnet run --project src/CreateAgent.Cli -- run request.json --storage ./runtime-data
 ```
 
-Sustituye `codex` por `claude` para generar una solicitud para Claude Code.
-Los modelos, esfuerzos y velocidades probados se encuentran en
-[Valores de Claude comprobados](docs/guia_para_agentes_desarrolladores.md#valores-de-claude-comprobados).
+Sustituye `codex` por `claude` u `opencode` para usar otro motor. Los valores
+probados se encuentran en la
+[guía para agentes desarrolladores](docs/guia_para_agentes_desarrolladores.md).
 
 ## Compilar y probar
 

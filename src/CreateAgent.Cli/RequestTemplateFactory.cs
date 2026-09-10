@@ -4,10 +4,13 @@ internal static class RequestTemplateFactory
 {
     public static AgentRunRequest Create(string provider)
     {
-        var providerName = provider.ToLowerInvariant() switch
+        var (providerName, model, effort) = provider.ToLowerInvariant() switch
         {
-            "codex" or "openai.codex" => "codex",
-            "claude" or "anthropic.claude" => "claude",
+            "codex" or "openai.codex" => ("codex", "provider-default", "medium"),
+            "claude" or "anthropic.claude" =>
+                ("claude", "provider-default", "medium"),
+            "opencode" or "anomaly.opencode" =>
+                ("opencode", "deepseek/deepseek-v4-flash", "high"),
             _ => throw new CliUsageException(
                 $"Provider '{provider}' is not supported by this CLI version."),
         };
@@ -16,6 +19,8 @@ internal static class RequestTemplateFactory
         {
             Name = "example-agent-run",
             ProviderName = providerName,
+            Model = model,
+            Reasoning = new AgentReasoningOptions { Effort = effort },
             Prompt = "Describe the objective for this agent run.",
         };
     }

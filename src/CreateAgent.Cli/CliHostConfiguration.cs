@@ -24,6 +24,8 @@ public sealed record CliProviderConfiguration
     public CliCodexConfiguration? Codex { get; init; } = new();
 
     public CliClaudeConfiguration? Claude { get; init; } = new();
+
+    public CliOpenCodeConfiguration? OpenCode { get; init; } = new();
 }
 
 public sealed record CliCodexConfiguration
@@ -36,13 +38,19 @@ public sealed record CliClaudeConfiguration
     public string Executable { get; init; } = "claude";
 }
 
+public sealed record CliOpenCodeConfiguration
+{
+    public string Executable { get; init; } = "opencode";
+}
+
 internal sealed record ResolvedCliHostConfiguration(
     string StorageRoot,
     int MaxConcurrentRuns,
     int EventChannelCapacity,
     int ProcessOutputChannelCapacity,
     string CodexExecutable,
-    string ClaudeExecutable)
+    string ClaudeExecutable,
+    string OpenCodeExecutable)
 {
     public CreateAgentOptions ToCreateAgentOptions() =>
         new()
@@ -105,6 +113,8 @@ internal static class CliHostConfigurationLoader
                          configuration.Providers?.Codex?.Executable;
         var claudeValue = arguments.GetValue("--claude-path") ??
                           configuration.Providers?.Claude?.Executable;
+        var openCodeValue = arguments.GetValue("--opencode-path") ??
+                            configuration.Providers?.OpenCode?.Executable;
 
         var maxConcurrent = arguments.GetPositiveInt32("--max-concurrent") ??
                             configuration.MaxConcurrentRuns ??
@@ -128,11 +138,15 @@ internal static class CliHostConfigurationLoader
             errors.Add(
                 "Host Providers.Codex.Executable is required and cannot be empty.");
         }
-
         else if (string.IsNullOrWhiteSpace(claudeValue))
         {
             errors.Add(
                 "Host Providers.Claude.Executable is required and cannot be empty.");
+        }
+        else if (string.IsNullOrWhiteSpace(openCodeValue))
+        {
+            errors.Add(
+                "Host Providers.OpenCode.Executable is required and cannot be empty.");
         }
 
         if (maxConcurrent <= 0)
@@ -158,13 +172,15 @@ internal static class CliHostConfigurationLoader
         var storage = ResolvePath(baseDirectory, storageValue);
         var codex = ResolveExecutablePath(baseDirectory, codexValue!);
         var claude = ResolveExecutablePath(baseDirectory, claudeValue!);
+        var openCode = ResolveExecutablePath(baseDirectory, openCodeValue!);
         return new ResolvedCliHostConfiguration(
             storage,
             maxConcurrent,
             eventCapacity,
             processCapacity,
             codex,
-            claude);
+            claude,
+            openCode);
     }
 
     public static string SerializeTemplate() =>
