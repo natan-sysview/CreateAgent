@@ -97,7 +97,7 @@ public sealed class OpenCodeCliAdapter : IAgentCliAdapter
             true,
             true,
             true,
-            false,
+            true,
             true,
             true,
             true,
@@ -143,6 +143,12 @@ public sealed class OpenCodeCliAdapter : IAgentCliAdapter
         if (request.Debug)
         {
             arguments.Add("--thinking");
+        }
+
+        if (request.Session.Mode == AgentSessionMode.Resume)
+        {
+            arguments.Add("--session");
+            arguments.Add(request.Session.Id!);
         }
 
         return Task.FromResult(
@@ -283,10 +289,10 @@ public sealed class OpenCodeCliAdapter : IAgentCliAdapter
                 "OpenCode CLI 1.18.30 cannot guarantee read-only external paths against shell commands.");
         }
 
-        if (request.Session.Mode != AgentSessionMode.New)
+        if (request.Session.Mode is not AgentSessionMode.New and not AgentSessionMode.Resume)
         {
             throw new InvalidOperationException(
-                "OpenCode sessions are scoped to their project directory, while CreateAgent creates a new workspace for every run. The OpenCode adapter currently supports only session.mode 'new'.");
+                "OpenCode supports session.mode 'new' and explicit 'resume' in CreateAgent. Ephemeral, continue-latest and fork are not verified.");
         }
 
         if (request.Tools.Any(

@@ -371,6 +371,70 @@ public sealed class CliApplicationTests
     }
 
     [Fact]
+    public async Task RunCanResumeSessionInSameWorkspaceAcrossCliInvocations()
+    {
+        using var temporary = new TemporaryDirectory();
+        var storage = Path.Combine(temporary.Path, "storage");
+        var firstRequestPath = Path.Combine(temporary.Path, "first.json");
+        await File.WriteAllTextAsync(
+            firstRequestPath,
+            CreateAgentJson.SerializeRequest(CreateRequest()));
+
+        var firstRun = await RunAsync(
+            [
+                "run",
+                firstRequestPath,
+                "--codex-path",
+                FakeCliPath(),
+                "--storage",
+                storage,
+                "--output",
+                "jsonl",
+            ]);
+        Assert.Equal((int)CliExitCode.Success, firstRun.ExitCode);
+        using var firstResult = ResultDocument(firstRun.StandardOutput);
+        var firstData = firstResult.RootElement.GetProperty("data");
+        var sessionId = firstData.GetProperty("sessionId").GetString()!;
+        var workspace = firstData.GetProperty("workspacePath").GetString()!;
+        var firstAudit = firstData.GetProperty("auditDirectory").GetString()!;
+        await File.WriteAllTextAsync(Path.Combine(workspace, "preserved.txt"), "UNO");
+
+        var resumedRequestPath = Path.Combine(temporary.Path, "resumed.json");
+        await File.WriteAllTextAsync(
+            resumedRequestPath,
+            CreateAgentJson.SerializeRequest(
+                CreateRequest() with
+                {
+                    Session = new AgentSessionOptions
+                    {
+                        Mode = AgentSessionMode.Resume,
+                        Id = sessionId,
+                    },
+                }));
+        var resumedRun = await RunAsync(
+            [
+                "run",
+                resumedRequestPath,
+                "--codex-path",
+                FakeCliPath(),
+                "--storage",
+                storage,
+                "--output",
+                "jsonl",
+            ]);
+
+        Assert.Equal((int)CliExitCode.Success, resumedRun.ExitCode);
+        using var resumedResult = ResultDocument(resumedRun.StandardOutput);
+        var resumedData = resumedResult.RootElement.GetProperty("data");
+        Assert.Equal(sessionId, resumedData.GetProperty("sessionId").GetString());
+        Assert.Equal(workspace, resumedData.GetProperty("workspacePath").GetString());
+        Assert.NotEqual(
+            firstAudit,
+            resumedData.GetProperty("auditDirectory").GetString());
+        Assert.Equal("UNO", await File.ReadAllTextAsync(Path.Combine(workspace, "preserved.txt")));
+    }
+
+    [Fact]
     public async Task HostTemplateIncludesAllProviderExecutables()
     {
         var result = await RunAsync(["host", "init", "--output", "-"]);
@@ -457,6 +521,16 @@ public sealed class CliApplicationTests
     {
         using var json = JsonDocument.Parse(line);
         return json.RootElement.GetProperty("type").GetString() == "result";
+    }
+
+    private static JsonDocument ResultDocument(string output)
+    {
+        var resultLine = Assert.Single(
+            output.Split(
+                '\n',
+                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+            IsResultLine);
+        return JsonDocument.Parse(resultLine);
     }
 
     private static async Task<CliRunResult> RunAsync(string[] args)

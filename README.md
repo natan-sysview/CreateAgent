@@ -9,6 +9,7 @@ Actualmente incluye adaptadores para **Codex CLI**, **Claude Code** y
 ## ¿Qué hace?
 
 - Crea un workspace independiente para cada agente.
+- Puede reanudar una sesión usando exactamente su workspace original.
 - Envía el prompt, modelo, velocidad y nivel de razonamiento.
 - Ejecuta varios agentes al mismo tiempo.
 - Informa el avance en tiempo real.
@@ -23,15 +24,23 @@ Actualmente incluye adaptadores para **Codex CLI**, **Claude Code** y
 - Al menos uno de estos CLI instalado y autenticado: Codex, Claude Code u
   OpenCode.
 
-## Uso básico desde C#
+## Instalación
 
-Agrega una referencia al proyecto `CreateAgent`:
+Instala la primera versión preliminar desde NuGet:
 
 ```bash
-dotnet add MiAplicacion.csproj reference /ruta/CreateAgent/src/CreateAgent/CreateAgent.csproj
+dotnet add package CreateAgent --version 0.1.0-alpha.1
 ```
 
-Después crea y ejecuta el agente:
+El wrapper de pruebas también puede instalarse como herramienta global:
+
+```bash
+dotnet tool install --global CreateAgent.Cli --version 0.1.0-alpha.1
+```
+
+## Uso básico desde C#
+
+Crea y ejecuta el agente:
 
 ```csharp
 using CreateAgent;
@@ -59,6 +68,7 @@ await foreach (var evento in agent.ReadEventsAsync())
 
 var resultado = await agent.Completion;
 Console.WriteLine(resultado.FinalMessage);
+Console.WriteLine(resultado.SessionId);
 ```
 
 `resultado` indica si el agente terminó correctamente, sus fechas de inicio y
@@ -69,6 +79,26 @@ el identificador completo `"anthropic.claude"`.
 
 Para OpenCode usa `ProviderName = "opencode"` y elige explícitamente
 `deepseek/deepseek-v4-flash` o `deepseek/deepseek-v4-pro`.
+
+## Reanudar una sesión
+
+Conserva el `SessionId` devuelto y envíalo en la siguiente solicitud:
+
+```csharp
+var continuacion = await manager.StartAsync(request with
+{
+    Session = new AgentSessionOptions
+    {
+        Mode = AgentSessionMode.Resume,
+        Id = resultado.SessionId,
+    },
+    Workspace = new AgentWorkspaceRequest(),
+});
+```
+
+CreateAgent vuelve al mismo workspace y crea una auditoría nueva. Para poder
+reanudar, `RetainSuccessfulWorkspace` debe permanecer en `true`, que es el
+valor predeterminado.
 
 ## Archivos para el agente
 

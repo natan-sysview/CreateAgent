@@ -1086,9 +1086,10 @@ La primera implementación usará defaults conservadores y configurables:
 10. Modelo, esfuerzo, velocidad y extensiones se traducirán dentro del
     adaptador; el núcleo conservará solamente el contrato neutral.
 
-Antes de publicar en NuGet todavía deberán definirse licencia, autores,
-repositorio público, firma y política definitiva de versionado. Estos datos no
-bloquean la construcción ni las pruebas de la primera versión.
+La primera publicación usa licencia Apache-2.0, el repositorio público de
+GitHub y versionado preliminar `0.1.0-alpha.1`. La publicación se realiza desde
+GitHub Actions mediante la identidad temporal de confianza de NuGet.org, sin
+guardar una API key permanente en el repositorio.
 
 ## 25. Principio rector
 

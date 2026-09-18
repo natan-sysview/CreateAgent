@@ -19,6 +19,8 @@
 | Streaming stdout/stderr | Implementado |
 | Eventos normalizados y payload nativo | Implementado |
 | Scheduler concurrente | Implementado en proceso |
+| Reanudación persistente | Codex, Claude y OpenCode reutilizan el workspace original |
+| Bloqueo de sesión | Impide dos reanudaciones simultáneas del mismo agente |
 | Timeout de cola y ejecución | Implementado |
 | Cancelación y process tree | Implementado |
 | Workspace con múltiples fuentes | Copia de directorio, contenido o archivo |
@@ -43,14 +45,14 @@
 | Resolución de perfiles de herramientas Codex | Pendiente |
 | Persistencia SQLite | Extensión futura; v0.1 usa filesystem |
 | Recuperación después de caída del host | Pendiente |
-| Publicación NuGet | Pendiente de licencia, repositorio y datos editoriales |
+| Publicación NuGet | Paquetes y metadatos preparados; publicación pública pendiente |
 
 ## Política de capacidades en Codex v0.1
 
 El adaptador configura internamente ejecución no interactiva, JSONL,
 aprobaciones desactivadas y escritura limitada al workspace. Rechaza:
 
-- `fork` no interactivo;
+- `continue-latest` y `fork`, porque su workspace no puede resolverse de forma inequívoca;
 - `performance: medium`, porque Codex no ofrece un modo medio distinto;
 - perfiles de herramientas hasta que exista el resolvedor del host;
 - niveles de razonamiento no soportados por Codex.
@@ -63,6 +65,8 @@ seguridad.
 El adaptador usa `claude -p` con eventos `stream-json`, permisos no
 interactivos y sandbox. Soporta modelo, sesiones, salida estructurada,
 herramientas, `.mcp.json`, skills e instrucciones preparadas en el workspace.
+La reanudación por ID vuelve al workspace registrado. `continue-latest` y
+`fork` quedan deshabilitados hasta definir semántica determinista de workspace.
 
 El probe inspecciona la ayuda del ejecutable antes de anunciar capacidades:
 
@@ -86,8 +90,9 @@ El adaptador usa `opencode run --pure --format json`, prompt por stdin y
 configuración de permisos aislada por proceso. Soporta DeepSeek V4 Flash y V4
 Pro, eventos estructurados, herramientas y razonamiento visible en debug.
 
-Solo permite `performance: normal` y `session.mode: new`. Rechaza sesiones
-reanudadas, salida con schema, rutas externas de solo lectura y modelos o
+Solo permite `performance: normal`. Admite sesiones nuevas y reanudación
+explícita mediante `--session`; rechaza `continue-latest`, `fork`, sesiones
+efímeras, salida con schema, rutas externas de solo lectura y modelos o
 variantes no comprobados. No degrada ni sustituye el modelo solicitado.
 
 ## Validación automatizada
@@ -114,6 +119,11 @@ La suite usa un CLI falso compilado como proceso independiente y cubre:
 - ZIP y SHA-256;
 - contrato JSON estricto;
 - contrato de entrada simplificado;
+- registro persistente de sesión y recuperación después de reiniciar el manager;
+- reutilización exacta del workspace y auditoría separada por reanudación;
+- rechazo de sesiones desconocidas, eliminadas, de otro proveedor o concurrentes;
+- invalidación al eliminar un workspace exitoso;
+- ZIP de un resume fallido con el workspace reutilizado y el audit actual;
 - argumentos no interactivos del adaptador;
 - probe seguro de la instalación local mediante `codex --version`;
 - argumentos, eventos, sesiones y seguridad del adaptador Claude Code;
@@ -131,11 +141,12 @@ Las pruebas específicas del wrapper cubren además:
 - schema embebido;
 - configuración y probe del ejecutable;
 - streaming JSONL y comando `inspect`;
+- flujo CLI completo de sesión nueva y reanudación con el mismo workspace;
 - formatos inválidos;
 - escritura atómica sin sobrescritura accidental;
 - rechazo limpio de configuraciones de proveedor incompletas.
 
-La suite actual contiene 67 pruebas: 49 de biblioteca/runtime y 18 del wrapper
+La suite actual contiene 86 pruebas: 67 de biblioteca/runtime y 19 del wrapper
 CLI.
 
 Las pruebas ordinarias nunca invocan una sesión real de IA. Las pruebas
@@ -146,5 +157,9 @@ externa de solo lectura.
 
 Las pruebas con OpenCode `1.18.30` comprobaron DeepSeek V4 Flash con `low`,
 `high` y `max`; DeepSeek V4 Pro con `high` y `max`; creación de archivos,
-captura de razonamiento y salida final. También confirmaron que sus sesiones
-están ligadas al directorio del proyecto.
+captura de razonamiento y salida final.
+
+El 10 de septiembre de 2026 se validó una sesión nueva y su reanudación real
+en Codex `0.146.0`, Claude `2.1.22` y OpenCode `1.18.30`. En los tres casos se
+conservó el mismo `sessionId`, se reutilizó exactamente el mismo workspace, el
+archivo pasó de `UNO` a `UNO/DOS` y cada ejecución produjo un audit distinto.

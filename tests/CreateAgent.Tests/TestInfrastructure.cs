@@ -41,19 +41,22 @@ internal sealed class FakeCliAdapter : IAgentCliAdapter
     private readonly string? _createdFile;
     private readonly int _eventCount;
     private readonly bool _available;
+    private readonly string? _sessionIdOverride;
 
     public FakeCliAdapter(
         string mode = "success",
         int delayMilliseconds = 10,
         string? createdFile = null,
         int eventCount = 0,
-        bool available = true)
+        bool available = true,
+        string? sessionIdOverride = null)
     {
         _mode = mode;
         _delayMilliseconds = delayMilliseconds;
         _createdFile = createdFile;
         _eventCount = eventCount;
         _available = available;
+        _sessionIdOverride = sessionIdOverride;
     }
 
     public AgentProviderId ProviderId { get; } = new("test.fake");
@@ -69,7 +72,7 @@ internal sealed class FakeCliAdapter : IAgentCliAdapter
                 _available,
                 _available,
                 true,
-                false,
+                true,
                 false,
                 false,
                 false,
@@ -98,6 +101,10 @@ internal sealed class FakeCliAdapter : IAgentCliAdapter
             _mode,
             "--delay-ms",
             _delayMilliseconds.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            "--session-id",
+            _sessionIdOverride ?? (request.Session.Mode == AgentSessionMode.Resume
+                ? request.Session.Id!
+                : $"fake-session-{workspace.RunId}"),
         };
         if (_createdFile is not null)
         {
@@ -240,7 +247,8 @@ internal static class TestManagerFactory
                 QuarantineOnFailure = quarantineOnFailure,
                 SecretsToRedact = secretsToRedact ?? [],
                 QueueTimeout = queueTimeout ?? TimeSpan.FromMinutes(5),
-            });
+            },
+            new FileSystemAgentSessionStore(storageRoot));
     }
 
     public static AgentRunRequest Request(

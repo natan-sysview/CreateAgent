@@ -65,6 +65,61 @@ public sealed class FileSystemWorkspaceProvider : IAgentWorkspaceProvider
             Path.Combine(auditDirectory, "output.json"));
     }
 
+    public Task<AgentWorkspace> PrepareResumeAsync(
+        string runId,
+        AgentRunRequest request,
+        string workspacePath,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var normalizedWorkspace = Path.GetFullPath(workspacePath);
+        var runsRoot = Path.Combine(_storageRoot, "runs");
+        if (!IsSameOrChildPath(normalizedWorkspace, runsRoot) ||
+            !string.Equals(
+                Path.GetFileName(normalizedWorkspace),
+                "workspace",
+                OperatingSystem.IsWindows()
+                    ? StringComparison.OrdinalIgnoreCase
+                    : StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"Session workspace is outside the configured runs directory: {normalizedWorkspace}");
+        }
+
+        if (!Directory.Exists(normalizedWorkspace))
+        {
+            throw new AgentSessionUnavailableException(
+                $"The workspace for session '{request.Session.Id}' no longer exists: {normalizedWorkspace}");
+        }
+
+        if (IsSymlink(new DirectoryInfo(normalizedWorkspace)))
+        {
+            throw new InvalidOperationException(
+                $"Session workspace cannot be a symbolic link: {normalizedWorkspace}");
+        }
+
+        var localNow = DateTimeOffset.Now;
+        var dayDirectory = Path.Combine(
+            _storageRoot,
+            "runs",
+            localNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        var runDirectory = AllocateRunDirectory(
+            dayDirectory,
+            CreateDirectorySlug(request.Name),
+            localNow);
+        var auditDirectory = Path.Combine(runDirectory, "audit");
+        CreatePrivateDirectory(auditDirectory);
+
+        return Task.FromResult(
+            new AgentWorkspace(
+                runId,
+                runDirectory,
+                normalizedWorkspace,
+                normalizedWorkspace,
+                auditDirectory,
+                Path.Combine(auditDirectory, "output.json")));
+    }
+
     public Task CleanupSuccessfulWorkspaceAsync(
         AgentWorkspace workspace,
         CancellationToken cancellationToken = default)

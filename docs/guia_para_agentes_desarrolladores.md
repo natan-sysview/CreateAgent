@@ -101,6 +101,11 @@ static async Task ConsumeEventsAsync(IAgentRunHandle handle)
 En un backend, registra el manager con vida de aplicación. No crees un manager
 nuevo para cada petición HTTP.
 
+Guarda `result.SessionId` cuando el flujo necesite continuar después. Para
+reanudar, crea otra solicitud con `Session.Mode = Resume`, el mismo ID y sin
+`Workspace.Sources`. CreateAgent resolverá el workspace mediante
+`StorageRoot`; nunca aceptes una ruta de workspace enviada por el usuario.
+
 ### Valores de Codex comprobados
 
 La siguiente tabla contiene ejecuciones reales finalizadas con estado
@@ -209,8 +214,9 @@ razonamiento mediante `--thinking`.
 Límites intencionales de esta primera versión:
 
 - solo los dos modelos de la tabla y `performance: normal`;
-- solo `session.mode: new`, porque OpenCode asocia las sesiones al directorio
-  del proyecto y CreateAgent crea un workspace nuevo por corrida;
+- sesiones `new` y `resume` por ID; la reanudación reutiliza el workspace
+  original y fue comprobada realmente con DeepSeek V4 Flash;
+- no admite `ephemeral`, `continue-latest` ni `fork`;
 - no admite todavía `outputSchema` ni `workspace.readOnlyPaths`;
 - `tools` actúa como allowlist; `question` y `external_directory` siempre se
   deniegan para conservar una ejecución no interactiva y aislada.
@@ -223,6 +229,17 @@ No cambies silenciosamente entre Pro y Flash para simular velocidad.
 
 El manager mantiene concurrencia, registro de runs y ciclo de vida. Debe
 reutilizarse y cerrarse correctamente.
+
+### Ciclo de vida de una sesión
+
+- `new` crea el workspace y registra el ID emitido por el proveedor.
+- `resume` bloquea esa sesión, reutiliza el workspace y crea un audit nuevo.
+- Dos sesiones distintas pueden ejecutarse en paralelo; el mismo ID no.
+- `RetainSuccessfulWorkspace=false` elimina el workspace e invalida la sesión.
+- Si falta el registro o el workspace, no intentes reconstruirlos ni copiar
+  fuentes: devuelve el error al consumidor.
+- `continue-latest` y `fork` no son equivalentes a `resume`; no los habilites
+  hasta definir explícitamente qué workspace deben usar.
 
 ### Adaptador por proveedor
 

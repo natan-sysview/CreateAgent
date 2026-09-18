@@ -20,7 +20,7 @@ public sealed class OpenCodeCliAdapterTests
         Assert.Equal("anomaly.opencode", capabilities.ProviderId.Value);
         Assert.True(capabilities.SupportsNonInteractiveExecution);
         Assert.True(capabilities.SupportsStructuredEvents);
-        Assert.False(capabilities.SupportsSessionResume);
+        Assert.True(capabilities.SupportsSessionResume);
         Assert.False(string.IsNullOrWhiteSpace(capabilities.Version));
     }
 
@@ -116,7 +116,7 @@ public sealed class OpenCodeCliAdapterTests
     }
 
     [Fact]
-    public async Task RejectsSessionModesThatCannotCrossNewWorkspaces()
+    public async Task ResumesExplicitSessionAndRejectsAmbiguousModes()
     {
         using var temporary = new TemporaryDirectory();
         var workspace = CreateWorkspace(temporary);
@@ -124,9 +124,20 @@ public sealed class OpenCodeCliAdapterTests
             new SystemProcessRunner(),
             FakeCliPath());
 
+        var resume = await adapter.CreateLaunchPlanAsync(
+            CreateRequest() with
+            {
+                Session = new AgentSessionOptions
+                {
+                    Mode = AgentSessionMode.Resume,
+                    Id = "session-123",
+                },
+            },
+            workspace);
+        AssertOption(resume.Arguments, "--session", "session-123");
+
         var modes = new[]
         {
-            AgentSessionMode.Resume,
             AgentSessionMode.ContinueLatest,
             AgentSessionMode.Fork,
             AgentSessionMode.Ephemeral,
@@ -141,13 +152,11 @@ public sealed class OpenCodeCliAdapterTests
                         Session = new AgentSessionOptions
                         {
                             Mode = mode,
-                            Id = mode == AgentSessionMode.Resume
-                                ? "session-123"
-                                : null,
+                            Id = null,
                         },
                     },
                     workspace));
-            Assert.Contains("only session.mode 'new'", exception.Message);
+            Assert.Contains("not verified", exception.Message);
         }
     }
 

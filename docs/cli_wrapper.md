@@ -86,6 +86,26 @@ se resuelven desde `host.json`.
 La auditoría siempre conserva `input.json`, `output.json` y `events.jsonl`.
 `debug: true` agrega únicamente `files.json`.
 
+## Reanudar desde el CLI
+
+La primera ejecución devuelve `data.sessionId`. Úsalo en un segundo JSON:
+
+```json
+{
+  "name": "continuar-mi-agente",
+  "providerName": "codex",
+  "session": {
+    "mode": "resume",
+    "id": "session-id-devuelto"
+  },
+  "prompt": "Continúa el trabajo anterior."
+}
+```
+
+Ejecuta ambas solicitudes con el mismo `--storage`. La segunda corrida usa el
+mismo workspace y crea otro directorio `audit`. No agregues
+`workspace.sources` al JSON de reanudación.
+
 ## Salida JSONL
 
 ```json

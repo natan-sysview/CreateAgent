@@ -589,6 +589,367 @@ public sealed class AgentWorkerManagerTests
         Assert.Empty(Directory.GetFileSystemEntries(result.WorkspacePath));
     }
 
+    [Fact]
+    public async Task ResumeReusesWorkspaceAndCreatesNewAuditAfterManagerRestart()
+    {
+        using var temporary = new TemporaryDirectory();
+        var source = temporary.CreateDirectory("source");
+        var storage = temporary.CreateDirectory("storage");
+        AgentRunResult firstResult;
+        using (var firstManager = TestManagerFactory.Create(
+                   storage,
+                   new FakeCliAdapter(createdFile: "first.txt")))
+        {
+            var first = await firstManager.StartAsync(
+                TestManagerFactory.Request(source, "create first file") with
+                {
+                    Debug = true,
+                });
+            var firstEvents = TestManagerFactory.CollectEventsAsync(
+                first.ReadEventsAsync());
+            firstResult = await first.Completion;
+            await firstEvents;
+        }
+
+        Assert.Equal(AgentRunState.Succeeded, firstResult.State);
+        Assert.False(string.IsNullOrWhiteSpace(firstResult.SessionId));
+        Assert.True(File.Exists(Path.Combine(firstResult.WorkspacePath, "first.txt")));
+
+        AgentRunResult resumedResult;
+        using (var resumedManager = TestManagerFactory.Create(
+                   storage,
+                   new FakeCliAdapter(createdFile: "second.txt")))
+        {
+            var resumed = await resumedManager.StartAsync(
+                TestManagerFactory.Request(source, "create second file") with
+                {
+                    Session = new AgentSessionOptions
+                    {
+                        Mode = AgentSessionMode.Resume,
+                        Id = firstResult.SessionId,
+                    },
+                    Workspace = new AgentWorkspaceRequest(),
+                    Debug = true,
+                });
+            var resumedEvents = TestManagerFactory.CollectEventsAsync(
+                resumed.ReadEventsAsync());
+            resumedResult = await resumed.Completion;
+            await resumedEvents;
+        }
+
+        Assert.Equal(AgentRunState.Succeeded, resumedResult.State);
+        Assert.Equal(firstResult.SessionId, resumedResult.SessionId);
+        Assert.Equal(firstResult.WorkspacePath, resumedResult.WorkspacePath);
+        Assert.NotEqual(firstResult.AuditDirectory, resumedResult.AuditDirectory);
+        Assert.True(File.Exists(Path.Combine(resumedResult.WorkspacePath, "first.txt")));
+        Assert.True(File.Exists(Path.Combine(resumedResult.WorkspacePath, "second.txt")));
+        Assert.Equal(
+            StandardAuditFiles.Append("files.json").Order(StringComparer.Ordinal),
+            Directory.GetFiles(resumedResult.AuditDirectory)
+                .Select(Path.GetFileName)
+                .Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public async Task UnknownSessionFailsBeforeCreatingWorkspaceOrStartingProvider()
+    {
+        using var temporary = new TemporaryDirectory();
+        var source = temporary.CreateDirectory("source");
+        var storage = temporary.CreateDirectory("storage");
+        using var manager = TestManagerFactory.Create(storage, new FakeCliAdapter());
+        var handle = await manager.StartAsync(
+            TestManagerFactory.Request(source, "resume missing") with
+            {
+                Session = new AgentSessionOptions
+                {
+                    Mode = AgentSessionMode.Resume,
+                    Id = "missing-session",
+                },
+                Workspace = new AgentWorkspaceRequest(),
+            });
+        var result = await handle.Completion;
+
+        Assert.Equal(AgentRunState.Failed, result.State);
+        Assert.Equal(string.Empty, result.WorkspacePath);
+        Assert.Contains(
+            result.Errors,
+            static error => error.Contains("not registered", StringComparison.Ordinal));
+        Assert.False(Directory.Exists(Path.Combine(storage, "runs")));
+    }
+
+    [Fact]
+    public async Task DeletingSuccessfulWorkspaceInvalidatesItsSession()
+    {
+        using var temporary = new TemporaryDirectory();
+        var source = temporary.CreateDirectory("source");
+        var storage = temporary.CreateDirectory("storage");
+        AgentRunResult firstResult;
+        using (var firstManager = TestManagerFactory.Create(
+                   storage,
+                   new FakeCliAdapter(),
+                   retainSuccessfulWorkspace: false))
+        {
+            var first = await firstManager.StartAsync(
+                TestManagerFactory.Request(source, "temporary session"));
+            firstResult = await first.Completion;
+        }
+
+        Assert.Equal(AgentRunState.Succeeded, firstResult.State);
+        Assert.False(string.IsNullOrWhiteSpace(firstResult.SessionId));
+        Assert.False(Directory.Exists(firstResult.WorkspacePath));
+
+        using var resumedManager = TestManagerFactory.Create(
+            storage,
+            new FakeCliAdapter());
+        var resumed = await resumedManager.StartAsync(
+            TestManagerFactory.Request(source, "must not resume") with
+            {
+                Session = new AgentSessionOptions
+                {
+                    Mode = AgentSessionMode.Resume,
+                    Id = firstResult.SessionId,
+                },
+                Workspace = new AgentWorkspaceRequest(),
+            });
+        var resumedResult = await resumed.Completion;
+
+        Assert.Equal(AgentRunState.Failed, resumedResult.State);
+        Assert.Contains(
+            resumedResult.Errors,
+            static error => error.Contains("not registered", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ConcurrentResumeOfSameSessionIsRejectedAsBusy()
+    {
+        using var temporary = new TemporaryDirectory();
+        var source = temporary.CreateDirectory("source");
+        var storage = temporary.CreateDirectory("storage");
+        AgentRunResult initialResult;
+        using (var seedManager = TestManagerFactory.Create(storage, new FakeCliAdapter()))
+        {
+            var seed = await seedManager.StartAsync(
+                TestManagerFactory.Request(source, "seed session"));
+            initialResult = await seed.Completion;
+        }
+
+        using var manager = TestManagerFactory.Create(
+            storage,
+            new FakeCliAdapter(delayMilliseconds: 500),
+            maxConcurrentRuns: 2);
+        var resumeRequest = TestManagerFactory.Request(source, "resume session") with
+        {
+            Session = new AgentSessionOptions
+            {
+                Mode = AgentSessionMode.Resume,
+                Id = initialResult.SessionId,
+            },
+            Workspace = new AgentWorkspaceRequest(),
+        };
+        var first = await manager.StartAsync(resumeRequest);
+        await WaitForStateAsync(first, AgentRunState.Running);
+        var second = await manager.StartAsync(resumeRequest);
+        var secondResult = await second.Completion;
+        var firstResult = await first.Completion;
+
+        Assert.Equal(AgentRunState.Succeeded, firstResult.State);
+        Assert.Equal(AgentRunState.Failed, secondResult.State);
+        Assert.Contains(
+            secondResult.Errors,
+            static error => error.Contains("already running", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task DifferentSessionsCanResumeConcurrently()
+    {
+        using var temporary = new TemporaryDirectory();
+        var source = temporary.CreateDirectory("source");
+        var storage = temporary.CreateDirectory("storage");
+        AgentRunResult[] seeds;
+        using (var seedManager = TestManagerFactory.Create(
+                   storage,
+                   new FakeCliAdapter(),
+                   maxConcurrentRuns: 2))
+        {
+            var firstSeed = await seedManager.StartAsync(
+                TestManagerFactory.Request(source, "first seed"));
+            var secondSeed = await seedManager.StartAsync(
+                TestManagerFactory.Request(source, "second seed"));
+            seeds = await Task.WhenAll(firstSeed.Completion, secondSeed.Completion);
+        }
+
+        using var manager = TestManagerFactory.Create(
+            storage,
+            new FakeCliAdapter(delayMilliseconds: 500),
+            maxConcurrentRuns: 2);
+        var first = await manager.StartAsync(ResumeRequest(seeds[0].SessionId!));
+        var second = await manager.StartAsync(ResumeRequest(seeds[1].SessionId!));
+        await Task.WhenAll(
+            WaitForStateAsync(first, AgentRunState.Running),
+            WaitForStateAsync(second, AgentRunState.Running));
+        var results = await Task.WhenAll(first.Completion, second.Completion);
+
+        Assert.All(
+            results,
+            static result => Assert.Equal(AgentRunState.Succeeded, result.State));
+
+        AgentRunRequest ResumeRequest(string sessionId) =>
+            TestManagerFactory.Request(source, "resume independent session") with
+            {
+                Session = new AgentSessionOptions
+                {
+                    Mode = AgentSessionMode.Resume,
+                    Id = sessionId,
+                },
+                Workspace = new AgentWorkspaceRequest(),
+            };
+    }
+
+    [Fact]
+    public async Task EphemeralSessionIsNotRegisteredForResume()
+    {
+        using var temporary = new TemporaryDirectory();
+        var source = temporary.CreateDirectory("source");
+        var storage = temporary.CreateDirectory("storage");
+        using var manager = TestManagerFactory.Create(storage, new FakeCliAdapter());
+        var ephemeral = await manager.StartAsync(
+            TestManagerFactory.Request(source, "ephemeral") with
+            {
+                Session = new AgentSessionOptions
+                {
+                    Mode = AgentSessionMode.Ephemeral,
+                },
+            });
+        var ephemeralResult = await ephemeral.Completion;
+        var resumed = await manager.StartAsync(
+            TestManagerFactory.Request(source, "resume ephemeral") with
+            {
+                Session = new AgentSessionOptions
+                {
+                    Mode = AgentSessionMode.Resume,
+                    Id = ephemeralResult.SessionId,
+                },
+                Workspace = new AgentWorkspaceRequest(),
+            });
+        var resumedResult = await resumed.Completion;
+
+        Assert.Equal(AgentRunState.Succeeded, ephemeralResult.State);
+        Assert.Equal(AgentRunState.Failed, resumedResult.State);
+        Assert.Contains(
+            resumedResult.Errors,
+            static error => error.Contains("not registered", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ResumeWithWorkspaceSourcesIsRejectedBeforeCreatingRun()
+    {
+        using var temporary = new TemporaryDirectory();
+        var source = temporary.CreateDirectory("source");
+        using var manager = TestManagerFactory.Create(
+            temporary.CreateDirectory("storage"),
+            new FakeCliAdapter());
+        var request = TestManagerFactory.Request(source, "invalid resume") with
+        {
+            Session = new AgentSessionOptions
+            {
+                Mode = AgentSessionMode.Resume,
+                Id = "session-123",
+            },
+        };
+
+        var exception = await Assert.ThrowsAsync<CreateAgentValidationException>(
+            () => manager.StartAsync(request));
+
+        Assert.Contains(
+            exception.Errors,
+            static error => error.Contains(
+                "cannot be copied during resume",
+                StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task FailedResumeArchiveContainsReusedWorkspaceAndCurrentAudit()
+    {
+        using var temporary = new TemporaryDirectory();
+        var source = temporary.CreateDirectory("source");
+        var storage = temporary.CreateDirectory("storage");
+        AgentRunResult initialResult;
+        using (var seedManager = TestManagerFactory.Create(
+                   storage,
+                   new FakeCliAdapter(createdFile: "preserved.txt")))
+        {
+            initialResult = await (await seedManager.StartAsync(
+                    TestManagerFactory.Request(source, "seed")))
+                .Completion;
+        }
+
+        using var manager = TestManagerFactory.Create(
+            storage,
+            new FakeCliAdapter(mode: "fail"));
+        var resumed = await manager.StartAsync(
+            TestManagerFactory.Request(source, "fail resumed run") with
+            {
+                Session = new AgentSessionOptions
+                {
+                    Mode = AgentSessionMode.Resume,
+                    Id = initialResult.SessionId,
+                },
+                Workspace = new AgentWorkspaceRequest(),
+                Debug = true,
+            });
+        var result = await resumed.Completion;
+
+        Assert.Equal(AgentRunState.Failed, result.State);
+        var artifact = Assert.Single(result.Artifacts);
+        using var archive = ZipFile.OpenRead(artifact.Path);
+        Assert.Contains(
+            archive.Entries,
+            static entry => entry.FullName == "workspace/preserved.txt");
+        Assert.Contains(
+            archive.Entries,
+            static entry => entry.FullName == "audit/input.json");
+        Assert.Contains(
+            archive.Entries,
+            static entry => entry.FullName == "audit/events.jsonl");
+    }
+
+    [Fact]
+    public async Task ResumeFailsWhenProviderReportsAnotherSessionId()
+    {
+        using var temporary = new TemporaryDirectory();
+        var source = temporary.CreateDirectory("source");
+        var storage = temporary.CreateDirectory("storage");
+        AgentRunResult initialResult;
+        using (var seedManager = TestManagerFactory.Create(storage, new FakeCliAdapter()))
+        {
+            initialResult = await (await seedManager.StartAsync(
+                    TestManagerFactory.Request(source, "seed")))
+                .Completion;
+        }
+
+        using var manager = TestManagerFactory.Create(
+            storage,
+            new FakeCliAdapter(sessionIdOverride: "wrong-session"));
+        var resumed = await manager.StartAsync(
+            TestManagerFactory.Request(source, "resume") with
+            {
+                Session = new AgentSessionOptions
+                {
+                    Mode = AgentSessionMode.Resume,
+                    Id = initialResult.SessionId,
+                },
+                Workspace = new AgentWorkspaceRequest(),
+            });
+        var result = await resumed.Completion;
+
+        Assert.Equal(AgentRunState.Failed, result.State);
+        Assert.Contains(
+            result.Errors,
+            static error => error.Contains(
+                "instead of requested session",
+                StringComparison.Ordinal));
+    }
+
     private static async Task WaitForStateAsync(
         IAgentRunHandle handle,
         AgentRunState expected)

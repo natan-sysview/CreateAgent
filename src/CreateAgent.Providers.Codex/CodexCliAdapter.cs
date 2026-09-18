@@ -217,20 +217,12 @@ public sealed class CodexCliAdapter : IAgentCliAdapter
     {
         var arguments = new List<string> { "exec" };
         ValidateRequestCapabilities(request);
-        var isResume = request.Session.Mode is AgentSessionMode.Resume
-            or AgentSessionMode.ContinueLatest;
+        var isResume = request.Session.Mode == AgentSessionMode.Resume;
 
         if (isResume)
         {
             arguments.Add("resume");
-            if (request.Session.Mode == AgentSessionMode.Resume)
-            {
-                arguments.Add(request.Session.Id!);
-            }
-            else
-            {
-                arguments.Add("--last");
-            }
+            arguments.Add(request.Session.Id!);
         }
 
         arguments.Add("--json");
@@ -406,10 +398,10 @@ public sealed class CodexCliAdapter : IAgentCliAdapter
 
     private static void ValidateRequestCapabilities(AgentRunRequest request)
     {
-        if (request.Session.Mode == AgentSessionMode.Fork)
+        if (request.Session.Mode is AgentSessionMode.ContinueLatest or AgentSessionMode.Fork)
         {
             throw new InvalidOperationException(
-                "Codex exec does not expose non-interactive session fork in the v1 baseline.");
+                "Codex continue-latest and fork are disabled until CreateAgent can determine their workspace explicitly. Use resume with a session Id.");
         }
 
         if (request.Tools.Count > 0)

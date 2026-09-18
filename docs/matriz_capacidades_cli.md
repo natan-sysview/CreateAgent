@@ -5,7 +5,7 @@
 Fecha de inspección: 2026-07-28.
 Actualización de Codex CLI: 2026-08-04.
 Validación del adaptador Claude Code: 2026-08-26.
-Validación del adaptador OpenCode: 2026-09-09.
+Validación de sesiones Codex, Claude y OpenCode: 2026-09-10.
 
 Versiones encontradas en la máquina y baseline temporal de prueba:
 
@@ -30,6 +30,7 @@ confirmarse con `ProbeAsync` antes de cada ejecución.
 | Modelo | `--model` | `--model` | `--model provider/model` | `--model` |
 | Sesión nueva | Sí | Sí | Sí | Sí |
 | Reanudar por ID | `exec resume`/`resume` | `--resume` | `--session`, ligado al proyecto | `--resume` |
+| Reanudación comprobada en CreateAgent | Sí | Sí | Sí | Adaptador pendiente |
 | Continuar última | `--last` | `--continue` | `--continue`, ligado al proyecto | `--resume latest` |
 | Fork de sesión | `fork` interactivo | `--fork-session` | `--fork`, ligado al proyecto | No demostrado en la ayuda instalada |
 | ID elegido por consumidor | No como contrato general | `--session-id UUID` | No | No demostrado en la ayuda instalada |
@@ -83,6 +84,9 @@ Configuración oficial relevante:
 
 El adaptador debe usar `codex exec --json` para automatización, no parsear la
 TUI.
+
+La reanudación real mediante `exec resume <sessionId>` conservó el workspace
+registrado y permitió modificar un archivo creado en la ejecución inicial.
 
 ## 3. Claude Code
 
@@ -151,6 +155,9 @@ En Claude, CreateAgent anuncia `performance: normal`; no existe una velocidad
 `medium` independiente. Fast permanece deshabilitado hasta que una cuenta de
 prueba confirme velocidad efectiva `fast`.
 
+La reanudación real mediante `--resume <sessionId>` conservó el workspace
+registrado y creó una auditoría independiente para la segunda ejecución.
+
 ## 4. OpenCode
 
 Baseline local: `1.18.30`, con DeepSeek autenticado.
@@ -166,11 +173,15 @@ Combinaciones ejecutadas con código de salida `0`:
 | `deepseek/deepseek-v4-flash` | `low`, `high`, `max` |
 | `deepseek/deepseek-v4-pro` | `high`, `max` |
 
-CreateAgent admite solamente esas combinaciones, `performance: normal` y
-sesiones nuevas. Aunque el CLI publica `--session`, `--continue` y `--fork`,
-las sesiones están ligadas al directorio del proyecto; no atraviesan los
-workspaces nuevos que crea la biblioteca. Tampoco se anuncian todavía schema
-de salida ni rutas externas de solo lectura.
+CreateAgent admite solamente esas combinaciones, `performance: normal`,
+sesiones nuevas y reanudación explícita con `--session`. La biblioteca registra
+el workspace de la sesión y vuelve a usarlo al reanudar; por eso la sesión no
+se mueve a otro proyecto. `continue-latest`, `fork` y `ephemeral` siguen
+deshabilitados. Tampoco se anuncian todavía schema de salida ni rutas externas
+de solo lectura.
+
+La reanudación real con DeepSeek V4 Flash conservó el mismo session ID y el
+mismo workspace, leyó `UNO` y añadió `DOS` en una ejecución posterior.
 
 ## 5. Gemini CLI
 

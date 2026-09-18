@@ -17,6 +17,10 @@
     <Authors>CreateAgent contributors</Authors>
     <Description>Cross-platform .NET runtime for isolated, observable and auditable AI CLI agent workers.</Description>
     <PackageTags>agents;ai;codex;claude;opencode;deepseek;cli;orchestration;workers</PackageTags>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/natan-sysview/CreateAgent</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/natan-sysview/CreateAgent.git</RepositoryUrl>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageOutputPath>$(MSBuildThisFileDirectory)artifacts/packages</PackageOutputPath>

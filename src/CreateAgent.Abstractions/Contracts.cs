@@ -64,8 +64,39 @@ public interface IAgentWorkspaceProvider
         AgentRunRequest request,
         CancellationToken cancellationToken = default);
 
+    Task<AgentWorkspace> PrepareResumeAsync(
+        string runId,
+        AgentRunRequest request,
+        string workspacePath,
+        CancellationToken cancellationToken = default) =>
+        Task.FromException<AgentWorkspace>(
+            new NotSupportedException(
+                "This workspace provider does not support session resume."));
+
     Task CleanupSuccessfulWorkspaceAsync(
         AgentWorkspace workspace,
+        CancellationToken cancellationToken = default);
+}
+
+public interface IAgentSessionLease : IAsyncDisposable
+{
+    AgentSessionRecord Session { get; }
+}
+
+public interface IAgentSessionStore
+{
+    Task SaveAsync(
+        AgentSessionRecord session,
+        CancellationToken cancellationToken = default);
+
+    Task<IAgentSessionLease> AcquireAsync(
+        AgentProviderId providerId,
+        string sessionId,
+        CancellationToken cancellationToken = default);
+
+    Task DeleteAsync(
+        AgentProviderId providerId,
+        string sessionId,
         CancellationToken cancellationToken = default);
 }
 
@@ -128,6 +159,27 @@ public sealed class AgentProviderUnavailableException : Exception
 {
     public AgentProviderUnavailableException(string message)
         : base(message)
+    {
+    }
+}
+
+public sealed class AgentSessionUnavailableException : Exception
+{
+    public AgentSessionUnavailableException(string message)
+        : base(message)
+    {
+    }
+}
+
+public sealed class AgentSessionBusyException : Exception
+{
+    public AgentSessionBusyException(string message)
+        : base(message)
+    {
+    }
+
+    public AgentSessionBusyException(string message, Exception innerException)
+        : base(message, innerException)
     {
     }
 }

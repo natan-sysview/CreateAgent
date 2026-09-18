@@ -49,11 +49,12 @@ public static class Program
             ? parsedEventCount
             : 0;
         var prompt = await Console.In.ReadToEndAsync().ConfigureAwait(false);
+        var sessionId = GetOption(args, "--session-id") ?? "fake-session-001";
 
         WriteEvent(new
         {
             type = "thread.started",
-            thread_id = "fake-session-001",
+            thread_id = sessionId,
         });
         WriteEvent(new { type = "turn.started" });
         if (string.Equals(mode, "invalid", StringComparison.Ordinal))

@@ -406,6 +406,12 @@ public sealed class ClaudeCodeCliAdapter : IAgentCliAdapter
 
     private void ValidateRequestCapabilities(AgentRunRequest request)
     {
+        if (request.Session.Mode is AgentSessionMode.ContinueLatest or AgentSessionMode.Fork)
+        {
+            throw new InvalidOperationException(
+                "Claude continue-latest and fork are disabled until CreateAgent can determine their workspace explicitly. Use resume with a session Id.");
+        }
+
         if (request.Performance == AgentPerformanceMode.Medium)
         {
             throw new InvalidOperationException(

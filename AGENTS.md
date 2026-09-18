@@ -28,6 +28,8 @@ funciona solamente porque aparece en otro cliente.
 - CreateAgent no redacta ni transforma el contenido del agente.
 - `--json` representa eventos del proveedor; `outputSchema` representa el
   objeto final. No mezcles ambos contratos.
+- `resume` siempre reutiliza el workspace físico registrado para esa sesión.
+  Nunca crea otro workspace ni vuelve a copiar `workspace.sources`.
 
 ## Integración correcta
 

@@ -85,7 +85,7 @@
       "properties": {
         "mode": {
           "type": "string",
-          "enum": ["new", "resume", "continue-latest", "fork", "ephemeral"],
+          "enum": ["new", "resume", "ephemeral"],
           "default": "new"
         },
         "id": {

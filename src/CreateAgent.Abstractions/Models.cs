@@ -220,6 +220,8 @@ public sealed record AgentRunResult(
     IReadOnlyList<string> Errors,
     IReadOnlyList<AgentArtifact> Artifacts)
 {
+    public string? SessionId { get; init; }
+
     public string AuditDirectory { get; init; } = string.Empty;
 
     public AgentRunExecutionPlan? ExecutionPlan { get; init; }
@@ -271,6 +273,11 @@ public sealed record AgentWorkspace(
     string WorkingDirectory,
     string AuditDirectory,
     string ResultPath);
+
+public sealed record AgentSessionRecord(
+    string SessionId,
+    AgentProviderId ProviderId,
+    string WorkspacePath);
 
 public sealed record AgentCliLaunchPlan(
     string ExecutablePath,

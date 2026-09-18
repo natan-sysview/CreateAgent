@@ -29,6 +29,7 @@ public static class CreateAgentRuntime
 
         var processRunner = new SystemProcessRunner(options.ProcessOutputChannelCapacity);
         var workspaceProvider = new FileSystemWorkspaceProvider(options.StorageRoot);
+        var sessionStore = new FileSystemAgentSessionStore(options.StorageRoot);
         var auditFactory = new JsonLineAuditFactory();
         var failureBundler = new ZipFailureBundler(options.StorageRoot);
         var codexAdapter = new CodexCliAdapter(processRunner, codexExecutable);
@@ -43,7 +44,8 @@ public static class CreateAgentRuntime
             workspaceProvider,
             auditFactory,
             failureBundler,
-            options);
+            options,
+            sessionStore);
     }
 
     public static IAgentWorkerManager Create(
@@ -52,12 +54,14 @@ public static class CreateAgentRuntime
         IAgentProcessRunner processRunner,
         IAgentWorkspaceProvider workspaceProvider,
         IAgentRunAuditFactory auditFactory,
-        IAgentFailureBundler failureBundler) =>
+        IAgentFailureBundler failureBundler,
+        IAgentSessionStore? sessionStore = null) =>
         new AgentWorkerManager(
             adapters,
             processRunner,
             workspaceProvider,
             auditFactory,
             failureBundler,
-            options);
+            options,
+            sessionStore ?? new FileSystemAgentSessionStore(options.StorageRoot));
 }

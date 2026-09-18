@@ -11,6 +11,7 @@ public sealed class AgentWorkerManager : IAgentWorkerManager, IDisposable
     private readonly IAgentWorkspaceProvider _workspaceProvider;
     private readonly IAgentRunAuditFactory _auditFactory;
     private readonly IAgentFailureBundler _failureBundler;
+    private readonly IAgentSessionStore _sessionStore;
     private readonly CreateAgentOptions _options;
     private readonly SemaphoreSlim _concurrencyGate;
     private readonly ConcurrentDictionary<string, AgentRunHandle> _runs =
@@ -25,7 +26,8 @@ public sealed class AgentWorkerManager : IAgentWorkerManager, IDisposable
         IAgentWorkspaceProvider workspaceProvider,
         IAgentRunAuditFactory auditFactory,
         IAgentFailureBundler failureBundler,
-        CreateAgentOptions options)
+        CreateAgentOptions options,
+        IAgentSessionStore? sessionStore = null)
     {
         ArgumentNullException.ThrowIfNull(adapters);
         ArgumentNullException.ThrowIfNull(processRunner);
@@ -74,6 +76,7 @@ public sealed class AgentWorkerManager : IAgentWorkerManager, IDisposable
         _workspaceProvider = workspaceProvider;
         _auditFactory = auditFactory;
         _failureBundler = failureBundler;
+        _sessionStore = sessionStore ?? new InMemoryAgentSessionStore();
         _options = options;
         _concurrencyGate = new SemaphoreSlim(
             options.MaxConcurrentRuns,
@@ -177,6 +180,7 @@ public sealed class AgentWorkerManager : IAgentWorkerManager, IDisposable
         AgentRunExecutionPlan? executionPlan = null;
         AgentCliLaunchPlan? launchPlan = null;
         JsonElement? structuredOutput = null;
+        IAgentSessionLease? sessionLease = null;
         var errors = new List<string>();
         var artifacts = new List<AgentArtifact>();
         var gateEntered = false;
@@ -207,9 +211,35 @@ public sealed class AgentWorkerManager : IAgentWorkerManager, IDisposable
                     $"Provider '{adapter.ProviderId}' is not available for non-interactive execution.");
             }
 
-            workspace = await _workspaceProvider
-                .PrepareAsync(handle.RunId, request, handle.ExecutionToken)
-                .ConfigureAwait(false);
+            if (request.Session.Mode == AgentSessionMode.Resume)
+            {
+                if (!capabilities.SupportsSessionResume)
+                {
+                    throw new InvalidOperationException(
+                        $"Provider '{adapter.ProviderId}' does not support session resume.");
+                }
+
+                sessionLease = await _sessionStore
+                    .AcquireAsync(
+                        adapter.ProviderId,
+                        request.Session.Id!,
+                        handle.ExecutionToken)
+                    .ConfigureAwait(false);
+                handle.SetSessionId(sessionLease.Session.SessionId);
+                workspace = await _workspaceProvider
+                    .PrepareResumeAsync(
+                        handle.RunId,
+                        request,
+                        sessionLease.Session.WorkspacePath,
+                        handle.ExecutionToken)
+                    .ConfigureAwait(false);
+            }
+            else
+            {
+                workspace = await _workspaceProvider
+                    .PrepareAsync(handle.RunId, request, handle.ExecutionToken)
+                    .ConfigureAwait(false);
+            }
             handle.SetWorkspace(workspace.WorkspaceDirectory);
 
             audit = await _auditFactory
@@ -278,6 +308,14 @@ public sealed class AgentWorkerManager : IAgentWorkerManager, IDisposable
                         async (output, token) =>
                         {
                             var decoded = adapter.DecodeOutput(output);
+                            await CaptureSessionAsync(
+                                    handle,
+                                    request,
+                                    adapter.ProviderId,
+                                    workspace,
+                                    decoded,
+                                    token)
+                                .ConfigureAwait(false);
                             await EmitAsync(handle, audit, decoded, token).ConfigureAwait(false);
                         },
                         executionCancellation.Token)
@@ -440,6 +478,7 @@ public sealed class AgentWorkerManager : IAgentWorkerManager, IDisposable
             errors,
             artifacts)
         {
+            SessionId = handle.SessionId,
             AuditDirectory = audit?.AuditDirectory ?? string.Empty,
             ExecutionPlan = executionPlan,
             StructuredOutput = structuredOutput,
@@ -510,6 +549,16 @@ public sealed class AgentWorkerManager : IAgentWorkerManager, IDisposable
                 state == AgentRunState.Succeeded &&
                 !_options.RetainSuccessfulWorkspace)
             {
+                if (!string.IsNullOrWhiteSpace(handle.SessionId))
+                {
+                    await _sessionStore
+                        .DeleteAsync(
+                            _adapters[request.ProviderName].ProviderId,
+                            handle.SessionId,
+                            CancellationToken.None)
+                        .ConfigureAwait(false);
+                }
+
                 await _workspaceProvider
                     .CleanupSuccessfulWorkspaceAsync(workspace, CancellationToken.None)
                     .ConfigureAwait(false);
@@ -537,6 +586,24 @@ public sealed class AgentWorkerManager : IAgentWorkerManager, IDisposable
                 catch (Exception exception)
                 {
                     errors.Add($"Audit disposal failed: {exception.Message}");
+                    result = result with
+                    {
+                        State = AgentRunState.Failed,
+                        Termination = AgentRunTermination.Failed,
+                        Errors = errors,
+                    };
+                }
+            }
+
+            if (sessionLease is not null)
+            {
+                try
+                {
+                    await sessionLease.DisposeAsync().ConfigureAwait(false);
+                }
+                catch (Exception exception)
+                {
+                    errors.Add($"Session lease disposal failed: {exception.Message}");
                     result = result with
                     {
                         State = AgentRunState.Failed,
@@ -576,6 +643,47 @@ public sealed class AgentWorkerManager : IAgentWorkerManager, IDisposable
         }
 
         await handle.PublishAsync(agentEvent, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task CaptureSessionAsync(
+        AgentRunHandle handle,
+        AgentRunRequest request,
+        AgentProviderId providerId,
+        AgentWorkspace workspace,
+        AgentDecodedEvent decoded,
+        CancellationToken cancellationToken)
+    {
+        if (decoded.Kind != AgentEventKind.SessionStarted)
+        {
+            return;
+        }
+
+        var sessionId = decoded.Message;
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            throw new InvalidOperationException(
+                $"Provider '{providerId}' emitted a session event without an identifier.");
+        }
+
+        if (request.Session.Mode == AgentSessionMode.Resume &&
+            !string.Equals(request.Session.Id, sessionId, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"Provider '{providerId}' resumed session '{sessionId}' instead of requested session '{request.Session.Id}'.");
+        }
+
+        handle.SetSessionId(sessionId);
+        if (request.Session.Mode == AgentSessionMode.New)
+        {
+            await _sessionStore
+                .SaveAsync(
+                    new AgentSessionRecord(
+                        sessionId,
+                        providerId,
+                        workspace.WorkspaceDirectory),
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
     }
 
     private static string CreateRunId() =>

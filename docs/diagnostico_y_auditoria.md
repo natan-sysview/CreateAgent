@@ -63,3 +63,17 @@ publicada por el proveedor.
 
 Si la ejecución falla, la política del host puede crear un ZIP de cuarentena
 con el workspace final y estos mismos archivos de auditoría.
+
+## Sesiones reanudadas
+
+Una reanudación conserva el workspace original, pero genera un `audit/` nuevo
+para esa ejecución. Así se puede distinguir qué entrada, eventos y salida
+pertenecen a cada intento sin duplicar los archivos de trabajo.
+
+Si una reanudación falla, el ZIP incluye exactamente:
+
+- `workspace/`: el workspace compartido en su estado final;
+- `audit/`: la auditoría de la ejecución que falló.
+
+Los registros mínimos de `StorageRoot/sessions` son datos internos para
+localizar workspaces; no se duplican dentro de cada auditoría.

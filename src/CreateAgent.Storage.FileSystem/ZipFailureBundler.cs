@@ -38,7 +38,7 @@ public sealed class ZipFailureBundler : IAgentFailureBundler
         try
         {
             await CreateArchiveSafelyAsync(
-                    workspace.RunDirectory,
+                    workspace,
                     temporaryPath,
                     cancellationToken)
                 .ConfigureAwait(false);
@@ -71,11 +71,10 @@ public sealed class ZipFailureBundler : IAgentFailureBundler
     }
 
     private static async Task CreateArchiveSafelyAsync(
-        string sourceRoot,
+        AgentWorkspace workspace,
         string archivePath,
         CancellationToken cancellationToken)
     {
-        var normalizedRoot = Path.GetFullPath(sourceRoot);
         await using var archiveStream = new FileStream(
             archivePath,
             FileMode.CreateNew,
@@ -87,6 +86,28 @@ public sealed class ZipFailureBundler : IAgentFailureBundler
             archiveStream,
             ZipArchiveMode.Create,
             leaveOpen: true);
+        await AddDirectoryAsync(
+                archive,
+                workspace.AuditDirectory,
+                "audit",
+                cancellationToken)
+            .ConfigureAwait(false);
+        await AddDirectoryAsync(
+                archive,
+                workspace.WorkspaceDirectory,
+                "workspace",
+                cancellationToken)
+            .ConfigureAwait(false);
+        await archiveStream.FlushAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async Task AddDirectoryAsync(
+        ZipArchive archive,
+        string sourceRoot,
+        string archiveRoot,
+        CancellationToken cancellationToken)
+    {
+        var normalizedRoot = Path.GetFullPath(sourceRoot);
         var pending = new Stack<string>();
         pending.Push(normalizedRoot);
 
@@ -115,7 +136,7 @@ public sealed class ZipFailureBundler : IAgentFailureBundler
                 var relativePath = Path.GetRelativePath(normalizedRoot, entryPath)
                     .Replace(Path.DirectorySeparatorChar, '/');
                 var archiveEntry = archive.CreateEntry(
-                    relativePath,
+                    string.Concat(archiveRoot, "/", relativePath),
                     CompressionLevel.Optimal);
                 await using var source = new FileStream(
                     entryPath,
@@ -129,8 +150,6 @@ public sealed class ZipFailureBundler : IAgentFailureBundler
                     .ConfigureAwait(false);
             }
         }
-
-        await archiveStream.FlushAsync(cancellationToken).ConfigureAwait(false);
     }
 
     private static void EnsureNotLink(FileSystemInfo fileSystemInfo)

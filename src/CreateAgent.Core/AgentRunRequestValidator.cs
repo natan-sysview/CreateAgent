@@ -53,6 +53,19 @@ public static class AgentRunRequestValidation
             errors.Add("Session Id is only valid when mode is resume.");
         }
 
+        if (request.Session.Mode is AgentSessionMode.ContinueLatest or AgentSessionMode.Fork)
+        {
+            errors.Add(
+                "Session mode must be new, resume with an explicit Id, or ephemeral. Continue-latest and fork do not have deterministic workspace semantics yet.");
+        }
+
+        if (request.Session.Mode == AgentSessionMode.Resume &&
+            request.Workspace.Sources.Count > 0)
+        {
+            errors.Add(
+                "Workspace sources cannot be copied during resume. The original session workspace is reused.");
+        }
+
         if (string.IsNullOrWhiteSpace(request.Prompt))
         {
             errors.Add("Prompt is required.");

@@ -17,6 +17,7 @@ internal sealed class AgentRunHandle : IAgentRunHandle, IDisposable
     private string? _workspacePath;
     private string? _lastMessage;
     private string? _finalMessage;
+    private string? _sessionId;
     private string? _cancellationReason;
 
     public AgentRunHandle(string runId, int eventChannelCapacity)
@@ -59,6 +60,17 @@ internal sealed class AgentRunHandle : IAgentRunHandle, IDisposable
             lock (_snapshotLock)
             {
                 return _finalMessage;
+            }
+        }
+    }
+
+    public string? SessionId
+    {
+        get
+        {
+            lock (_snapshotLock)
+            {
+                return _sessionId;
             }
         }
     }
@@ -137,6 +149,27 @@ internal sealed class AgentRunHandle : IAgentRunHandle, IDisposable
         lock (_snapshotLock)
         {
             _workspacePath = workspacePath;
+        }
+    }
+
+    public void SetSessionId(string sessionId)
+    {
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            throw new InvalidOperationException(
+                "Provider emitted an empty session identifier.");
+        }
+
+        lock (_snapshotLock)
+        {
+            if (_sessionId is not null &&
+                !string.Equals(_sessionId, sessionId, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    $"Provider changed session id from '{_sessionId}' to '{sessionId}' during one run.");
+            }
+
+            _sessionId = sessionId;
         }
     }
 

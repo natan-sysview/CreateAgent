@@ -82,6 +82,7 @@ internal sealed class CliOutput
             .AddColumn("Field")
             .AddColumn("Value");
         table.AddRow("Run", Markup.Escape(result.RunId));
+        table.AddRow("Session", Markup.Escape(result.SessionId ?? "n/a"));
         table.AddRow("State", Markup.Escape(result.State.ToString()));
         table.AddRow(
             "Exit code",

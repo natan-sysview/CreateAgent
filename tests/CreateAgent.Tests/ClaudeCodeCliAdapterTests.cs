@@ -171,7 +171,7 @@ public sealed class ClaudeCodeCliAdapterTests
     }
 
     [Fact]
-    public async Task MapsClaudeResumeContinueAndForkSessions()
+    public async Task MapsClaudeResumeAndRejectsAmbiguousSessions()
     {
         using var temporary = new TemporaryDirectory();
         var workspace = CreateWorkspace(temporary);
@@ -186,23 +186,19 @@ public sealed class ClaudeCodeCliAdapterTests
                 Id = "session-123",
             }),
             workspace);
-        var continueLatest = await adapter.CreateLaunchPlanAsync(
-            CreateRequest(new AgentSessionOptions
-            {
-                Mode = AgentSessionMode.ContinueLatest,
-            }),
-            workspace);
-        var fork = await adapter.CreateLaunchPlanAsync(
-            CreateRequest(new AgentSessionOptions
-            {
-                Mode = AgentSessionMode.Fork,
-            }),
-            workspace);
-
         AssertOption(resume.Arguments, "--resume", "session-123");
-        Assert.Contains("--continue", continueLatest.Arguments);
-        Assert.Contains("--continue", fork.Arguments);
-        Assert.Contains("--fork-session", fork.Arguments);
+        foreach (var mode in new[]
+                 {
+                     AgentSessionMode.ContinueLatest,
+                     AgentSessionMode.Fork,
+                 })
+        {
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+                () => adapter.CreateLaunchPlanAsync(
+                    CreateRequest(new AgentSessionOptions { Mode = mode }),
+                    workspace));
+            Assert.Contains("workspace", exception.Message);
+        }
     }
 
     [Theory]

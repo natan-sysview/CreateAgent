@@ -132,6 +132,57 @@ public sealed class CodexCliAdapterTests
         Assert.Contains("\"read\"", fileSystemConfig, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task ResumesExplicitSessionAndRejectsAmbiguousSessions()
+    {
+        using var temporary = new TemporaryDirectory();
+        var workspacePath = temporary.CreateDirectory("workspace");
+        var workspace = new AgentWorkspace(
+            "test-run",
+            temporary.CreateDirectory("run"),
+            workspacePath,
+            workspacePath,
+            temporary.CreateDirectory("run/audit"),
+            Path.Combine(temporary.Path, "run", "audit", "output.json"));
+        var adapter = new CodexCliAdapter(new SystemProcessRunner(), FakeCliPath());
+        var resume = await adapter.CreateLaunchPlanAsync(
+            new AgentRunRequest
+            {
+                Name = "Codex resume test",
+                ProviderName = "codex",
+                Prompt = "continue",
+                Session = new AgentSessionOptions
+                {
+                    Mode = AgentSessionMode.Resume,
+                    Id = "session-123",
+                },
+            },
+            workspace);
+
+        Assert.Equal("exec", resume.Arguments[0]);
+        Assert.Equal("resume", resume.Arguments[1]);
+        Assert.Equal("session-123", resume.Arguments[2]);
+
+        foreach (var mode in new[]
+                 {
+                     AgentSessionMode.ContinueLatest,
+                     AgentSessionMode.Fork,
+                 })
+        {
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+                () => adapter.CreateLaunchPlanAsync(
+                    new AgentRunRequest
+                    {
+                        Name = "Codex ambiguous session test",
+                        ProviderName = "codex",
+                        Prompt = "continue",
+                        Session = new AgentSessionOptions { Mode = mode },
+                    },
+                    workspace));
+            Assert.Contains("workspace", exception.Message);
+        }
+    }
+
     private static string FakeCliPath() =>
         System.IO.Path.Combine(
             AppContext.BaseDirectory,

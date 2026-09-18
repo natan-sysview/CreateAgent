@@ -122,12 +122,22 @@ Para reanudar una sesión:
 }
 ```
 
-`id` solamente es válido con `resume`. Otros modos disponibles en el contrato
-son `continue-latest`, `fork` y `ephemeral`; cada adaptador declara cuáles
-puede ejecutar.
+`id` solamente es válido con `resume`. Los modos actuales son `new`, `resume`
+y `ephemeral`. `continue-latest` y `fork` se rechazan porque no permiten
+resolver de forma inequívoca el workspace antes de ejecutar el proveedor.
 
-OpenCode admite únicamente `new`: sus sesiones están asociadas al directorio
-del proyecto y cada corrida de CreateAgent usa un workspace nuevo.
+Con `resume`, CreateAgent localiza la sesión dentro de `StorageRoot`, reutiliza
+exactamente su workspace original y crea una auditoría nueva. No se permite
+enviar `workspace.sources` porque volver a copiar archivos podría sobrescribir
+el estado anterior. `workspace.readOnlyPaths` sí puede enviarse nuevamente,
+porque controla permisos de esa ejecución y no copia información.
+
+La reanudación requiere que el workspace haya sido conservado. Si no existe,
+la sesión es desconocida, pertenece a otro proveedor o ya está ejecutándose,
+la corrida falla antes de iniciar el proceso del CLI.
+
+Codex, Claude y OpenCode permiten `resume` por ID. `ephemeral` depende de la
+capacidad del adaptador y no queda registrado para una reanudación posterior.
 
 ### `prompt`
 
@@ -146,6 +156,13 @@ Tiempo máximo de ejecución en formato ISO-8601. El valor normal es `PT30M`.
 
 Cuando es `true`, CreateAgent agrega `audit/files.json` con los archivos
 creados, modificados o eliminados. La auditoría básica siempre está activa.
+
+### Resultado y `sessionId`
+
+`AgentRunResult.sessionId` contiene el identificador real informado por el
+proveedor. La aplicación padre debe conservarlo si después desea usar
+`session.mode: resume`. El registro interno que conecta ese ID con el
+workspace se guarda automáticamente en `StorageRoot/sessions`.
 
 ## 4. Resultado estructurado
 
