@@ -277,11 +277,12 @@ solo lectura:
   posterior).
 - En Claude se combina `--add-dir` con reglas que deniegan edición y escritura
   desde el sandbox. `--add-dir` por sí solo no representa solo lectura.
-- En OpenCode `1.18.30`, `readOnlyPaths` requiere una allowlist explícita de
-  herramientas no mutables. CreateAgent permite únicamente herramientas de
-  consulta, autoriza sólo las rutas externas declaradas y bloquea `edit` y
-  `bash`. Para archivos individuales usa `tools: ["read"]`; `glob`, `grep` y
-  `list` se admiten únicamente cuando todas las rutas son directorios.
+- En OpenCode `1.18.30`, `readOnlyPaths` requiere una allowlist explícita.
+  CreateAgent autoriza sólo las rutas externas declaradas, mantiene bloqueado
+  `bash` y admite `edit` exclusivamente para escribir dentro del workspace.
+  Las rutas externas siguen protegidas contra edición. Para archivos
+  individuales usa `tools: ["read", "edit"]`; `glob`, `grep` y `list` se
+  admiten únicamente cuando todas las rutas son directorios.
 
 ## 6. Herramientas
 
@@ -308,8 +309,9 @@ herramientas.
 En OpenCode, una lista vacía conserva las herramientas normales solamente
 cuando no existen `readOnlyPaths`. Una lista con valores se convierte en
 allowlist. Con rutas externas, CreateAgent administra internamente
-`external_directory`, mantiene `question`, `edit` y `bash` denegados y exige
-herramientas de consulta explícitas.
+`external_directory`, mantiene `question` y `bash` denegados, protege las rutas
+externas contra edición y permite `edit` dentro del workspace cuando se
+solicita explícitamente.
 
 ## 7. Valores internos
 

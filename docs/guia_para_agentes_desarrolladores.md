@@ -218,11 +218,11 @@ Límites intencionales de esta primera versión:
   original y fue comprobada realmente con DeepSeek V4 Flash;
 - no admite `ephemeral`, `continue-latest` ni `fork`;
 - no admite todavía `outputSchema`;
-- admite `workspace.readOnlyPaths` cuando `tools` contiene exclusivamente
-  herramientas de consulta; CreateAgent autoriza las rutas externas y bloquea
-  `edit`, `bash` y `question`;
-- para archivos individuales usa `tools: ["read"]`; `glob`, `grep` y `list`
-  requieren rutas de directorio.
+- admite `workspace.readOnlyPaths` cuando `tools` contiene herramientas de
+  consulta y, opcionalmente, `edit`; CreateAgent autoriza las rutas externas,
+  permite escribir sólo dentro del workspace y bloquea `bash` y `question`;
+- para archivos individuales usa `tools: ["read", "edit"]`; `glob`, `grep` y
+  `list` requieren rutas de directorio.
 
 No cambies silenciosamente entre Pro y Flash para simular velocidad.
 

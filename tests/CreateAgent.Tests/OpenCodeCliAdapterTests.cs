@@ -187,7 +187,7 @@ public sealed class OpenCodeCliAdapterTests
     }
 
     [Fact]
-    public async Task AllowsReadOnlyDirectoriesWithQueryTools()
+    public async Task AllowsWorkspaceEditsWhileProtectingReadOnlyDirectories()
     {
         using var temporary = new TemporaryDirectory();
         var reference = temporary.CreateDirectory("reference");
@@ -196,7 +196,7 @@ public sealed class OpenCodeCliAdapterTests
             FakeCliPath());
         var request = CreateRequest() with
         {
-            Tools = ["read", "glob", "grep"],
+            Tools = ["read", "edit", "glob", "grep"],
             Workspace = new AgentWorkspaceRequest
             {
                 ReadOnlyPaths = [reference],
@@ -214,13 +214,48 @@ public sealed class OpenCodeCliAdapterTests
         Assert.Equal("allow", permissions.GetProperty("read").GetString());
         Assert.Equal("allow", permissions.GetProperty("glob").GetString());
         Assert.Equal("allow", permissions.GetProperty("grep").GetString());
-        Assert.Equal("deny", permissions.GetProperty("edit").GetString());
+        var edit = permissions.GetProperty("edit");
+        Assert.Equal("allow", edit.GetProperty("*").GetString());
+        Assert.Equal(
+            "deny",
+            edit.GetProperty(AbsoluteChildrenPattern(reference)).GetString());
+        Assert.Equal(
+            "deny",
+            edit.GetProperty(RelativeSuffixPattern(reference, true)).GetString());
         Assert.Equal("deny", permissions.GetProperty("bash").GetString());
         var external = permissions.GetProperty("external_directory");
         Assert.Equal("deny", external.GetProperty("*").GetString());
         Assert.Equal(
             "allow",
             external.GetProperty(AbsoluteChildrenPattern(reference)).GetString());
+    }
+
+    [Fact]
+    public async Task KeepsWorkspaceEditsDisabledWhenEditIsNotRequested()
+    {
+        using var temporary = new TemporaryDirectory();
+        var reference = temporary.CreateDirectory("reference");
+        var adapter = new OpenCodeCliAdapter(
+            new SystemProcessRunner(),
+            FakeCliPath());
+        var request = CreateRequest() with
+        {
+            Tools = ["read"],
+            Workspace = new AgentWorkspaceRequest
+            {
+                ReadOnlyPaths = [reference],
+            },
+        };
+
+        var plan = await adapter.CreateLaunchPlanAsync(
+            request,
+            CreateWorkspace(temporary));
+
+        using var config = JsonDocument.Parse(
+            plan.Environment["OPENCODE_CONFIG_CONTENT"]);
+        var permissions = config.RootElement.GetProperty("permission");
+        Assert.Equal("deny", permissions.GetProperty("edit").GetString());
+        Assert.Equal("deny", permissions.GetProperty("bash").GetString());
     }
 
     [Fact]
@@ -235,7 +270,7 @@ public sealed class OpenCodeCliAdapterTests
             FakeCliPath());
         var request = CreateRequest() with
         {
-            Tools = ["read"],
+            Tools = ["read", "edit"],
             Workspace = new AgentWorkspaceRequest
             {
                 ReadOnlyPaths = [allowed],
@@ -261,7 +296,14 @@ public sealed class OpenCodeCliAdapterTests
         Assert.Equal(
             "allow",
             read.GetProperty(RelativeSuffixPattern(allowed, false)).GetString());
-        Assert.Equal("deny", permissions.GetProperty("edit").GetString());
+        var edit = permissions.GetProperty("edit");
+        Assert.Equal("allow", edit.GetProperty("*").GetString());
+        Assert.Equal(
+            "deny",
+            edit.GetProperty(AbsolutePath(allowed)).GetString());
+        Assert.Equal(
+            "deny",
+            edit.GetProperty(RelativeSuffixPattern(allowed, false)).GetString());
         Assert.Equal("deny", permissions.GetProperty("bash").GetString());
     }
 
@@ -378,8 +420,11 @@ public sealed class OpenCodeCliAdapterTests
 
     private static string AbsoluteChildrenPattern(string path) =>
         string.Concat(
-            Path.GetFullPath(path).Replace('\\', '/').TrimEnd('/'),
+            AbsolutePath(path).TrimEnd('/'),
             "/*");
+
+    private static string AbsolutePath(string path) =>
+        Path.GetFullPath(path).Replace('\\', '/');
 
     private static string RelativeSuffixPattern(
         string path,

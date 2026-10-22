@@ -121,7 +121,7 @@ Para consultar información pesada sin copiarla ni modificarla:
 
 ```json
 {
-  "tools": ["read"],
+  "tools": ["read", "edit"],
   "workspace": {
     "readOnlyPaths": [
       "/ruta/datos-pesados"
@@ -130,8 +130,9 @@ Para consultar información pesada sin copiarla ni modificarla:
 }
 ```
 
-OpenCode requiere la lista explícita de herramientas de consulta cuando usa
-`readOnlyPaths`; CreateAgent mantiene bloqueados shell y escritura.
+OpenCode requiere una lista explícita de herramientas cuando usa
+`readOnlyPaths`. Con `edit`, CreateAgent permite escribir dentro del workspace,
+mantiene las rutas externas en solo lectura y bloquea shell.
 
 ## Probar con el CLI incluido
 

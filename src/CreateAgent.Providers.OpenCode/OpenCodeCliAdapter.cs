@@ -11,10 +11,11 @@ public sealed class OpenCodeCliAdapter : IAgentCliAdapter
         new(StringComparer.OrdinalIgnoreCase) { "normal" };
     private static readonly HashSet<string> ReasoningEfforts =
         new(StringComparer.OrdinalIgnoreCase) { "low", "high", "max" };
-    private static readonly HashSet<string> NonMutatingTools =
+    private static readonly HashSet<string> ReadOnlyPathCompatibleTools =
         new(StringComparer.OrdinalIgnoreCase)
         {
             "read",
+            "edit",
             "glob",
             "grep",
             "list",
@@ -327,18 +328,18 @@ public sealed class OpenCodeCliAdapter : IAgentCliAdapter
         if (request.Tools.Count == 0)
         {
             throw new InvalidOperationException(
-                "OpenCode read-only paths require an explicit tools allowlist. Use only non-mutating tools such as 'read', 'glob' or 'grep'.");
+                "OpenCode read-only paths require an explicit tools allowlist. Use query tools and optionally 'edit' for workspace-only changes.");
         }
 
         var unsupported = request.Tools
-            .Where(tool => !NonMutatingTools.Contains(tool))
+            .Where(tool => !ReadOnlyPathCompatibleTools.Contains(tool))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Order(StringComparer.OrdinalIgnoreCase)
             .ToArray();
         if (unsupported.Length > 0)
         {
             throw new InvalidOperationException(
-                $"OpenCode read-only paths cannot be combined with tools that may mutate local data: {string.Join(", ", unsupported)}.");
+                $"OpenCode read-only paths cannot be combined with tools that can bypass path permissions: {string.Join(", ", unsupported)}.");
         }
 
         if (!request.Tools.Any(
@@ -384,7 +385,12 @@ public sealed class OpenCodeCliAdapter : IAgentCliAdapter
         }
         else
         {
-            permissions["edit"] = "deny";
+            permissions["edit"] = tools is not null &&
+                                  tools.Contains(
+                                      "edit",
+                                      StringComparer.OrdinalIgnoreCase)
+                ? BuildEditRules(readOnlyPaths)
+                : "deny";
             permissions["bash"] = "deny";
             permissions["external_directory"] =
                 BuildExternalDirectoryRules(readOnlyPaths);
@@ -424,6 +430,27 @@ public sealed class OpenCodeCliAdapter : IAgentCliAdapter
         }
 
         return environment;
+    }
+
+    private static Dictionary<string, string> BuildEditRules(
+        IReadOnlyList<string> readOnlyPaths)
+    {
+        var rules = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["*"] = "allow",
+        };
+        foreach (var path in readOnlyPaths
+                     .Select(Path.GetFullPath)
+                     .Distinct(PathComparer))
+        {
+            var isDirectory = Directory.Exists(path);
+            rules[isDirectory
+                ? ToAbsoluteChildrenPattern(path)
+                : NormalizeForOpenCode(path)] = "deny";
+            rules[ToRelativeSuffixPattern(path, isDirectory)] = "deny";
+        }
+
+        return rules;
     }
 
     private static Dictionary<string, string> BuildExternalDirectoryRules(
