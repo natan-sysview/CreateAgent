@@ -64,7 +64,7 @@ Adaptador solicitado. Los valores implementados son `codex`, `claude` y
 ### `model`
 
 Modelo solicitado. Si se omite, el proveedor selecciona su modelo normal.
-OpenCode requiere elegir `deepseek/deepseek-v4-flash` o
+OpenCode requiere elegir `deepseek/deepseek-flash` o
 `deepseek/deepseek-v4-pro`.
 
 ### `performance`
@@ -277,8 +277,11 @@ solo lectura:
   posterior).
 - En Claude se combina `--add-dir` con reglas que deniegan edición y escritura
   desde el sandbox. `--add-dir` por sí solo no representa solo lectura.
-- OpenCode `1.18.30` no puede garantizar solo lectura frente a comandos de
-  shell; su adaptador rechaza `readOnlyPaths`.
+- En OpenCode `1.18.30`, `readOnlyPaths` requiere una allowlist explícita de
+  herramientas no mutables. CreateAgent permite únicamente herramientas de
+  consulta, autoriza sólo las rutas externas declaradas y bloquea `edit` y
+  `bash`. Para archivos individuales usa `tools: ["read"]`; `glob`, `grep` y
+  `list` se admiten únicamente cuando todas las rutas son directorios.
 
 ## 6. Herramientas
 
@@ -302,9 +305,11 @@ configuración MCP estricta para no cargar servidores ajenos al workspace.
 Codex v0.1 todavía rechaza listas no vacías hasta que exista su resolvedor de
 herramientas.
 
-En OpenCode, una lista vacía conserva las herramientas normales. Una lista con
-valores se convierte en allowlist; `question` y `external_directory` permanecen
-denegadas por seguridad.
+En OpenCode, una lista vacía conserva las herramientas normales solamente
+cuando no existen `readOnlyPaths`. Una lista con valores se convierte en
+allowlist. Con rutas externas, CreateAgent administra internamente
+`external_directory`, mantiene `question`, `edit` y `bash` denegados y exige
+herramientas de consulta explícitas.
 
 ## 7. Valores internos
 

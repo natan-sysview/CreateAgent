@@ -200,9 +200,9 @@ Baseline: OpenCode `1.18.30`, con DeepSeek autenticado.
 
 | `providerName` | `model` | `performance` | `reasoning.effort` | Resultado |
 |---|---|---|---|---|
-| `opencode` | `deepseek/deepseek-v4-flash` | `normal` | `low` | Comprobado |
-| `opencode` | `deepseek/deepseek-v4-flash` | `normal` | `high` | Comprobado |
-| `opencode` | `deepseek/deepseek-v4-flash` | `normal` | `max` | Comprobado |
+| `opencode` | `deepseek/deepseek-flash` | `normal` | `low` | Comprobado con archivos externos de solo lectura |
+| `opencode` | `deepseek/deepseek-flash` | `normal` | `high` | Admitido por adaptador; pendiente de prueba real |
+| `opencode` | `deepseek/deepseek-flash` | `normal` | `max` | Comprobado en ejecución real |
 | `opencode` | `deepseek/deepseek-v4-pro` | `normal` | `high` | Comprobado |
 | `opencode` | `deepseek/deepseek-v4-pro` | `normal` | `max` | Comprobado |
 
@@ -217,9 +217,12 @@ Límites intencionales de esta primera versión:
 - sesiones `new` y `resume` por ID; la reanudación reutiliza el workspace
   original y fue comprobada realmente con DeepSeek V4 Flash;
 - no admite `ephemeral`, `continue-latest` ni `fork`;
-- no admite todavía `outputSchema` ni `workspace.readOnlyPaths`;
-- `tools` actúa como allowlist; `question` y `external_directory` siempre se
-  deniegan para conservar una ejecución no interactiva y aislada.
+- no admite todavía `outputSchema`;
+- admite `workspace.readOnlyPaths` cuando `tools` contiene exclusivamente
+  herramientas de consulta; CreateAgent autoriza las rutas externas y bloquea
+  `edit`, `bash` y `question`;
+- para archivos individuales usa `tools: ["read"]`; `glob`, `grep` y `list`
+  requieren rutas de directorio.
 
 No cambies silenciosamente entre Pro y Flash para simular velocidad.
 

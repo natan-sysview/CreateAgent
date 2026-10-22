@@ -10,7 +10,7 @@ internal static class RequestTemplateFactory
             "claude" or "anthropic.claude" =>
                 ("claude", "provider-default", "medium"),
             "opencode" or "anomaly.opencode" =>
-                ("opencode", "deepseek/deepseek-v4-flash", "high"),
+                ("opencode", "deepseek/deepseek-flash", "high"),
             _ => throw new CliUsageException(
                 $"Provider '{provider}' is not supported by this CLI version."),
         };

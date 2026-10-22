@@ -4,13 +4,25 @@ namespace CreateAgent.Providers.OpenCode;
 
 public sealed class OpenCodeCliAdapter : IAgentCliAdapter
 {
-    public const string FlashModel = "deepseek/deepseek-v4-flash";
+    public const string FlashModel = "deepseek/deepseek-flash";
     public const string ProModel = "deepseek/deepseek-v4-pro";
 
     private static readonly HashSet<string> PerformanceModes =
         new(StringComparer.OrdinalIgnoreCase) { "normal" };
     private static readonly HashSet<string> ReasoningEfforts =
         new(StringComparer.OrdinalIgnoreCase) { "low", "high", "max" };
+    private static readonly HashSet<string> NonMutatingTools =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            "read",
+            "glob",
+            "grep",
+            "list",
+            "webfetch",
+            "websearch",
+        };
+    private static readonly HashSet<string> DirectoryOnlyTools =
+        new(StringComparer.OrdinalIgnoreCase) { "glob", "grep", "list" };
     private static readonly Dictionary<string, IReadOnlySet<string>>
         ModelEfforts = new Dictionary<string, IReadOnlySet<string>>(
             StringComparer.OrdinalIgnoreCase)
@@ -56,7 +68,7 @@ public sealed class OpenCodeCliAdapter : IAgentCliAdapter
                         executablePath,
                         ["--version"],
                         Environment.CurrentDirectory,
-                        BuildEnvironment(executablePath, null),
+                        BuildEnvironment(executablePath, null, []),
                         AgentInputMode.None,
                         AgentOutputProtocol.Text),
                     null,
@@ -156,7 +168,10 @@ public sealed class OpenCodeCliAdapter : IAgentCliAdapter
                 executablePath,
                 arguments,
                 workspace.WorkingDirectory,
-                BuildEnvironment(executablePath, request.Tools),
+                BuildEnvironment(
+                    executablePath,
+                    request.Tools,
+                    request.Workspace.ReadOnlyPaths),
                 AgentInputMode.StandardInput,
                 AgentOutputProtocol.JsonLines));
     }
@@ -283,11 +298,7 @@ public sealed class OpenCodeCliAdapter : IAgentCliAdapter
                 "OpenCode CLI 1.18.30 does not provide a verified native output schema option.");
         }
 
-        if (request.Workspace.ReadOnlyPaths.Count > 0)
-        {
-            throw new InvalidOperationException(
-                "OpenCode CLI 1.18.30 cannot guarantee read-only external paths against shell commands.");
-        }
+        ValidateReadOnlyPaths(request);
 
         if (request.Session.Mode is not AgentSessionMode.New and not AgentSessionMode.Resume)
         {
@@ -306,11 +317,55 @@ public sealed class OpenCodeCliAdapter : IAgentCliAdapter
         }
     }
 
+    private static void ValidateReadOnlyPaths(AgentRunRequest request)
+    {
+        if (request.Workspace.ReadOnlyPaths.Count == 0)
+        {
+            return;
+        }
+
+        if (request.Tools.Count == 0)
+        {
+            throw new InvalidOperationException(
+                "OpenCode read-only paths require an explicit tools allowlist. Use only non-mutating tools such as 'read', 'glob' or 'grep'.");
+        }
+
+        var unsupported = request.Tools
+            .Where(tool => !NonMutatingTools.Contains(tool))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (unsupported.Length > 0)
+        {
+            throw new InvalidOperationException(
+                $"OpenCode read-only paths cannot be combined with tools that may mutate local data: {string.Join(", ", unsupported)}.");
+        }
+
+        if (!request.Tools.Any(
+                static tool =>
+                    tool.Equals("read", StringComparison.OrdinalIgnoreCase) ||
+                    tool.Equals("glob", StringComparison.OrdinalIgnoreCase) ||
+                    tool.Equals("grep", StringComparison.OrdinalIgnoreCase) ||
+                    tool.Equals("list", StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new InvalidOperationException(
+                "OpenCode read-only paths require at least one local query tool: read, glob, grep or list.");
+        }
+
+        if (request.Workspace.ReadOnlyPaths.Any(File.Exists) &&
+            request.Tools.Any(DirectoryOnlyTools.Contains))
+        {
+            throw new InvalidOperationException(
+                "OpenCode individual read-only files support the 'read' tool only. Glob, grep and list require directory paths.");
+        }
+    }
+
     private static Dictionary<string, string> BuildEnvironment(
         string executablePath,
-        IReadOnlyList<string>? tools)
+        IReadOnlyList<string>? tools,
+        IReadOnlyList<string> readOnlyPaths)
     {
-        var permissions = new Dictionary<string, string>(StringComparer.Ordinal)
+        var permissions = new Dictionary<string, object>(StringComparer.Ordinal)
         {
             ["*"] = tools is null || tools.Count == 0 ? "allow" : "deny",
         };
@@ -323,7 +378,30 @@ public sealed class OpenCodeCliAdapter : IAgentCliAdapter
         }
 
         permissions["question"] = "deny";
-        permissions["external_directory"] = "deny";
+        if (readOnlyPaths.Count == 0)
+        {
+            permissions["external_directory"] = "deny";
+        }
+        else
+        {
+            permissions["edit"] = "deny";
+            permissions["bash"] = "deny";
+            permissions["external_directory"] =
+                BuildExternalDirectoryRules(readOnlyPaths);
+
+            var filePaths = readOnlyPaths
+                .Where(File.Exists)
+                .Select(Path.GetFullPath)
+                .Distinct(PathComparer)
+                .ToArray();
+            if (filePaths.Length > 0)
+            {
+                permissions["read"] = BuildFileReadRules(
+                    readOnlyPaths,
+                    filePaths);
+            }
+        }
+
         var environment = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["OPENCODE_AUTO_SHARE"] = "false",
@@ -347,6 +425,113 @@ public sealed class OpenCodeCliAdapter : IAgentCliAdapter
 
         return environment;
     }
+
+    private static Dictionary<string, string> BuildExternalDirectoryRules(
+        IReadOnlyList<string> readOnlyPaths)
+    {
+        var rules = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["*"] = "deny",
+        };
+        foreach (var path in readOnlyPaths
+                     .Select(Path.GetFullPath)
+                     .Distinct(PathComparer))
+        {
+            var directory = Directory.Exists(path)
+                ? path
+                : Path.GetDirectoryName(path)!;
+            rules[ToAbsoluteChildrenPattern(directory)] = "allow";
+        }
+
+        return rules;
+    }
+
+    private static Dictionary<string, string> BuildFileReadRules(
+        IReadOnlyList<string> readOnlyPaths,
+        IReadOnlyList<string> filePaths)
+    {
+        var directoryPaths = readOnlyPaths
+            .Where(Directory.Exists)
+            .Select(Path.GetFullPath)
+            .Distinct(PathComparer)
+            .ToArray();
+        var fileParents = filePaths
+            .Select(Path.GetDirectoryName)
+            .Where(static path => !string.IsNullOrWhiteSpace(path))
+            .Select(static path => path!)
+            .Where(parent => !directoryPaths.Any(directory =>
+                IsWithinDirectory(parent, directory)))
+            .Distinct(PathComparer)
+            .ToArray();
+
+        var rules = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["*"] = "allow",
+        };
+        foreach (var parent in fileParents)
+        {
+            rules[ToRelativeSuffixPattern(parent, includeChildren: true)] =
+                "deny";
+        }
+
+        foreach (var directory in directoryPaths)
+        {
+            rules[ToRelativeSuffixPattern(directory, includeChildren: true)] =
+                "allow";
+        }
+
+        foreach (var file in filePaths)
+        {
+            rules[ToRelativeSuffixPattern(file, includeChildren: false)] =
+                "allow";
+        }
+
+        return rules;
+    }
+
+    private static string ToAbsoluteChildrenPattern(string path) =>
+        string.Concat(NormalizeForOpenCode(path).TrimEnd('/'), "/*");
+
+    private static string ToRelativeSuffixPattern(
+        string path,
+        bool includeChildren)
+    {
+        var fullPath = Path.GetFullPath(path);
+        var root = Path.GetPathRoot(fullPath) ?? string.Empty;
+        var suffix = fullPath[root.Length..]
+            .Replace('\\', '/')
+            .Trim('/');
+        if (suffix.Length == 0)
+        {
+            return "*";
+        }
+
+        return includeChildren
+            ? $"*{suffix}/*"
+            : $"*{suffix}";
+    }
+
+    private static string NormalizeForOpenCode(string path) =>
+        Path.GetFullPath(path).Replace('\\', '/');
+
+    private static bool IsWithinDirectory(string path, string directory)
+    {
+        var relative = Path.GetRelativePath(directory, path);
+        return relative == "." ||
+               (!Path.IsPathRooted(relative) &&
+                relative != ".." &&
+                !relative.StartsWith(
+                    string.Concat("..", Path.DirectorySeparatorChar),
+                    StringComparison.Ordinal) &&
+                !relative.StartsWith(
+                    string.Concat("..", Path.AltDirectorySeparatorChar),
+                    StringComparison.Ordinal));
+    }
+
+    private static StringComparer PathComparer =>
+        OperatingSystem.IsWindows()
+            ? StringComparer.OrdinalIgnoreCase
+            : StringComparer.Ordinal;
 
     private AgentProviderCapabilities Unavailable(string diagnostic) =>
         new(

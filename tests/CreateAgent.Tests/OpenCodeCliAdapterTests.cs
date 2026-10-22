@@ -165,7 +165,6 @@ public sealed class OpenCodeCliAdapterTests
     {
         using var temporary = new TemporaryDirectory();
         var workspace = CreateWorkspace(temporary);
-        var reference = temporary.CreateDirectory("reference");
         var adapter = new OpenCodeCliAdapter(
             new SystemProcessRunner(),
             FakeCliPath());
@@ -177,6 +176,108 @@ public sealed class OpenCodeCliAdapterTests
                 OutputSchema = JsonSerializer.SerializeToElement(
                     new { type = "object" }),
             },
+            CreateRequest() with { Tools = ["question"] },
+        };
+
+        foreach (var request in requests)
+        {
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () => adapter.CreateLaunchPlanAsync(request, workspace));
+        }
+    }
+
+    [Fact]
+    public async Task AllowsReadOnlyDirectoriesWithQueryTools()
+    {
+        using var temporary = new TemporaryDirectory();
+        var reference = temporary.CreateDirectory("reference");
+        var adapter = new OpenCodeCliAdapter(
+            new SystemProcessRunner(),
+            FakeCliPath());
+        var request = CreateRequest() with
+        {
+            Tools = ["read", "glob", "grep"],
+            Workspace = new AgentWorkspaceRequest
+            {
+                ReadOnlyPaths = [reference],
+            },
+        };
+
+        var plan = await adapter.CreateLaunchPlanAsync(
+            request,
+            CreateWorkspace(temporary));
+
+        using var config = JsonDocument.Parse(
+            plan.Environment["OPENCODE_CONFIG_CONTENT"]);
+        var permissions = config.RootElement.GetProperty("permission");
+        Assert.Equal("deny", permissions.GetProperty("*").GetString());
+        Assert.Equal("allow", permissions.GetProperty("read").GetString());
+        Assert.Equal("allow", permissions.GetProperty("glob").GetString());
+        Assert.Equal("allow", permissions.GetProperty("grep").GetString());
+        Assert.Equal("deny", permissions.GetProperty("edit").GetString());
+        Assert.Equal("deny", permissions.GetProperty("bash").GetString());
+        var external = permissions.GetProperty("external_directory");
+        Assert.Equal("deny", external.GetProperty("*").GetString());
+        Assert.Equal(
+            "allow",
+            external.GetProperty(AbsoluteChildrenPattern(reference)).GetString());
+    }
+
+    [Fact]
+    public async Task ScopesIndividualReadOnlyFilesToExplicitReadRules()
+    {
+        using var temporary = new TemporaryDirectory();
+        var reference = temporary.CreateDirectory("reference");
+        var allowed = Path.Combine(reference, "allowed.json");
+        File.WriteAllText(allowed, "{}");
+        var adapter = new OpenCodeCliAdapter(
+            new SystemProcessRunner(),
+            FakeCliPath());
+        var request = CreateRequest() with
+        {
+            Tools = ["read"],
+            Workspace = new AgentWorkspaceRequest
+            {
+                ReadOnlyPaths = [allowed],
+            },
+        };
+
+        var plan = await adapter.CreateLaunchPlanAsync(
+            request,
+            CreateWorkspace(temporary));
+
+        using var config = JsonDocument.Parse(
+            plan.Environment["OPENCODE_CONFIG_CONTENT"]);
+        var permissions = config.RootElement.GetProperty("permission");
+        var external = permissions.GetProperty("external_directory");
+        Assert.Equal(
+            "allow",
+            external.GetProperty(AbsoluteChildrenPattern(reference)).GetString());
+        var read = permissions.GetProperty("read");
+        Assert.Equal("allow", read.GetProperty("*").GetString());
+        Assert.Equal(
+            "deny",
+            read.GetProperty(RelativeSuffixPattern(reference, true)).GetString());
+        Assert.Equal(
+            "allow",
+            read.GetProperty(RelativeSuffixPattern(allowed, false)).GetString());
+        Assert.Equal("deny", permissions.GetProperty("edit").GetString());
+        Assert.Equal("deny", permissions.GetProperty("bash").GetString());
+    }
+
+    [Fact]
+    public async Task RejectsUnsafeReadOnlyPathToolCombinations()
+    {
+        using var temporary = new TemporaryDirectory();
+        var reference = temporary.CreateDirectory("reference");
+        var file = Path.Combine(reference, "input.json");
+        File.WriteAllText(file, "{}");
+        var workspace = CreateWorkspace(temporary);
+        var adapter = new OpenCodeCliAdapter(
+            new SystemProcessRunner(),
+            FakeCliPath());
+        var requests = new[]
+        {
             CreateRequest() with
             {
                 Workspace = new AgentWorkspaceRequest
@@ -184,7 +285,30 @@ public sealed class OpenCodeCliAdapterTests
                     ReadOnlyPaths = [reference],
                 },
             },
-            CreateRequest() with { Tools = ["question"] },
+            CreateRequest() with
+            {
+                Tools = ["read", "bash"],
+                Workspace = new AgentWorkspaceRequest
+                {
+                    ReadOnlyPaths = [reference],
+                },
+            },
+            CreateRequest() with
+            {
+                Tools = ["websearch"],
+                Workspace = new AgentWorkspaceRequest
+                {
+                    ReadOnlyPaths = [reference],
+                },
+            },
+            CreateRequest() with
+            {
+                Tools = ["read", "grep"],
+                Workspace = new AgentWorkspaceRequest
+                {
+                    ReadOnlyPaths = [file],
+                },
+            },
         };
 
         foreach (var request in requests)
@@ -251,6 +375,25 @@ public sealed class OpenCodeCliAdapterTests
 
     private static AgentProcessOutput Output(string text) =>
         new(1, DateTimeOffset.UtcNow, AgentOutputChannel.StandardOutput, text);
+
+    private static string AbsoluteChildrenPattern(string path) =>
+        string.Concat(
+            Path.GetFullPath(path).Replace('\\', '/').TrimEnd('/'),
+            "/*");
+
+    private static string RelativeSuffixPattern(
+        string path,
+        bool includeChildren)
+    {
+        var fullPath = Path.GetFullPath(path);
+        var root = Path.GetPathRoot(fullPath) ?? string.Empty;
+        var suffix = fullPath[root.Length..]
+            .Replace('\\', '/')
+            .Trim('/');
+        return includeChildren
+            ? $"*{suffix}/*"
+            : $"*{suffix}";
+    }
 
     private static void AssertOption(
         IReadOnlyList<string> arguments,

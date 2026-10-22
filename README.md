@@ -78,7 +78,7 @@ Para usar Claude Code cambia `ProviderName` a `"claude"`. También se acepta
 el identificador completo `"anthropic.claude"`.
 
 Para OpenCode usa `ProviderName = "opencode"` y elige explícitamente
-`deepseek/deepseek-v4-flash` o `deepseek/deepseek-v4-pro`.
+`deepseek/deepseek-flash` o `deepseek/deepseek-v4-pro`.
 
 ## Reanudar una sesión
 
@@ -121,6 +121,7 @@ Para consultar información pesada sin copiarla ni modificarla:
 
 ```json
 {
+  "tools": ["read"],
   "workspace": {
     "readOnlyPaths": [
       "/ruta/datos-pesados"
@@ -128,6 +129,9 @@ Para consultar información pesada sin copiarla ni modificarla:
   }
 }
 ```
+
+OpenCode requiere la lista explícita de herramientas de consulta cuando usa
+`readOnlyPaths`; CreateAgent mantiene bloqueados shell y escritura.
 
 ## Probar con el CLI incluido
 

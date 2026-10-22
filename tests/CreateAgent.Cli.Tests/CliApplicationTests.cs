@@ -60,7 +60,7 @@ public sealed class CliApplicationTests
             "opencode",
             request.RootElement.GetProperty("providerName").GetString());
         Assert.Equal(
-            "deepseek/deepseek-v4-flash",
+            "deepseek/deepseek-flash",
             request.RootElement.GetProperty("model").GetString());
         Assert.Equal(
             "high",
@@ -303,7 +303,7 @@ public sealed class CliApplicationTests
                 CreateRequest() with
                 {
                     ProviderName = "opencode",
-                    Model = "deepseek/deepseek-v4-flash",
+                    Model = "deepseek/deepseek-flash",
                     Reasoning = new AgentReasoningOptions { Effort = "high" },
                 }));
 
@@ -338,7 +338,7 @@ public sealed class CliApplicationTests
                 CreateRequest() with
                 {
                     ProviderName = "opencode",
-                    Model = "deepseek/deepseek-v4-flash",
+                    Model = "deepseek/deepseek-flash",
                     Reasoning = new AgentReasoningOptions { Effort = "high" },
                     Prompt = "FAIL_OPENCODE",
                 }));
